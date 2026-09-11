@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { useSiftStore } from './store'
 import Dashboard from './components/Dashboard'
 import DuplicatesView from './components/DuplicatesView'
-import TreemapView from './components/TreemapView'
+import FolderTree from './components/FolderTree'
 import SettingsModal from './components/SettingsModal'
 import appIcon from './assets/app-icon.png'
 
@@ -76,7 +76,7 @@ function App(): React.JSX.Element {
 
       <main className="px-6 py-6 max-w-5xl mx-auto">
         {activeView === 'dashboard' && <Dashboard />}
-        {activeView === 'explore' && <TreemapView />}
+        {activeView === 'explore' && <FolderTree />}
         {activeView === 'duplicates' && <DuplicatesView />}
       </main>
 
