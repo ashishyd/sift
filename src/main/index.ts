@@ -5,7 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { runFullScan } from './scanner'
 import { findDuplicates } from './duplicates'
 import { moveToTrash } from './trashOps'
-import { getSuggestion, askAboutScan } from './ai'
+import { getSuggestion, askAboutScan, hasClaudeCli } from './ai'
 import {
   setApiKey,
   clearApiKey,
@@ -19,8 +19,10 @@ import {
 import { checkAllPermissions, openPrivacySettings, type PrivacyPane } from './permissions'
 import { createTray, getLastScanSummary } from './tray'
 import type { ScanSummary } from '../shared/types'
+import type { Tray } from 'electron'
 
 let isQuitting = false
+let trayRef: Tray | null = null
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -78,7 +80,7 @@ app.whenReady().then(() => {
   const mainWindow = createWindow()
 
   if (process.platform === 'darwin') {
-    createTray(() => mainWindow)
+    trayRef = createTray(() => mainWindow)
   }
 
   ipcMain.handle('sift:getLastScanSummary', async () => getLastScanSummary())
@@ -124,6 +126,7 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:openPrivacySettings', async (_event, pane: PrivacyPane) => openPrivacySettings(pane))
 
   ipcMain.handle('sift:hasApiKey', async () => hasApiKey())
+  ipcMain.handle('sift:hasClaudeCli', async () => hasClaudeCli())
   ipcMain.handle('sift:setApiKey', async (_event, key: string) => setApiKey(key))
   ipcMain.handle('sift:clearApiKey', async () => clearApiKey())
 
@@ -152,6 +155,10 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  // Explicitly destroy the status item — an abrupt process exit can otherwise leave a
+  // "ghost" icon in the menu bar until the Dock/SystemUIServer restarts.
+  trayRef?.destroy()
+  trayRef = null
 })
 
 app.on('window-all-closed', () => {

@@ -28,6 +28,7 @@ const api = {
   askAi: (summary: ScanSummary, question: string): Promise<string> =>
     ipcRenderer.invoke('sift:askAi', summary, question),
   hasApiKey: (): Promise<boolean> => ipcRenderer.invoke('sift:hasApiKey'),
+  hasClaudeCli: (): Promise<boolean> => ipcRenderer.invoke('sift:hasClaudeCli'),
   setApiKey: (key: string): Promise<void> => ipcRenderer.invoke('sift:setApiKey', key),
   clearApiKey: (): Promise<void> => ipcRenderer.invoke('sift:clearApiKey'),
   confirmTrash: (count: number, sizeLabel: string): Promise<boolean> =>

@@ -8,6 +8,7 @@ export default function SettingsModal(): React.JSX.Element | null {
   const setOpen = useSiftStore((s) => s.setSettingsOpen)
   const hasApiKey = useSiftStore((s) => s.hasApiKey)
   const setHasApiKey = useSiftStore((s) => s.setHasApiKey)
+  const hasClaudeCli = useSiftStore((s) => s.hasClaudeCli)
   const showToast = useSiftStore((s) => s.showToast)
   const permissions = useSiftStore((s) => s.permissions)
   const isCheckingPermissions = useSiftStore((s) => s.isCheckingPermissions)
@@ -115,13 +116,34 @@ export default function SettingsModal(): React.JSX.Element | null {
         <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
           Claude AI
         </h3>
-        <p className="text-[12.5px] text-[var(--sift-text-muted)] mb-4">
+        <p className="text-[12.5px] text-[var(--sift-text-muted)] mb-2">
           Sift can call Claude to turn your scan into plain-English recommendations. Only category labels, sizes and
-          a few example filenames are sent — never file contents. Your key is encrypted on disk with macOS Keychain.
+          a few example filenames are sent — never file contents.
         </p>
 
+        <div className="flex items-center justify-between rounded-lg border border-[var(--sift-border)] px-3 py-2 mb-4">
+          <div>
+            <span className="text-[13px]">Claude Code CLI</span>
+            <p className="text-[11px] text-[var(--sift-text-muted)]">
+              {hasClaudeCli
+                ? 'Detected and ready — no API key needed.'
+                : "Not found on this Mac. Install it and Sift will use your existing login."}
+            </p>
+          </div>
+          <span
+            className={clsx(
+              'text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0',
+              hasClaudeCli
+                ? 'bg-[var(--sift-accent-soft)] text-[var(--sift-safe)]'
+                : 'bg-white/5 text-[var(--sift-text-muted)]'
+            )}
+          >
+            {hasClaudeCli ? 'Ready' : 'Not found'}
+          </span>
+        </div>
+
         <label className="block text-[12px] font-medium text-[var(--sift-text-muted)] mb-1.5">
-          Anthropic API key
+          Anthropic API key <span className="text-[var(--sift-text-muted)] font-normal">(optional — used instead of the CLI if set)</span>
         </label>
         <input
           type="password"
@@ -130,6 +152,7 @@ export default function SettingsModal(): React.JSX.Element | null {
           placeholder={hasApiKey ? '•••••••••••••••••••• (key set)' : 'sk-ant-...'}
           className="w-full rounded-lg border border-[var(--sift-border)] bg-[var(--sift-bg)] px-3 py-2 text-[13px] outline-none focus:border-[var(--sift-accent)]"
         />
+        <p className="text-[11px] text-[var(--sift-text-muted)] mt-1.5">Encrypted on disk with macOS Keychain.</p>
 
         {clearHistory && clearHistory.length > 0 && (
           <div className="mt-5">

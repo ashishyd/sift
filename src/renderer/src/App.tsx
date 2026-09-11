@@ -13,13 +13,16 @@ function App(): React.JSX.Element {
   const setSettingsOpen = useSiftStore((s) => s.setSettingsOpen)
   const hasApiKey = useSiftStore((s) => s.hasApiKey)
   const setHasApiKey = useSiftStore((s) => s.setHasApiKey)
+  const hasClaudeCli = useSiftStore((s) => s.hasClaudeCli)
+  const setHasClaudeCli = useSiftStore((s) => s.setHasClaudeCli)
   const toast = useSiftStore((s) => s.toast)
   const loadCachedSummary = useSiftStore((s) => s.loadCachedSummary)
 
   useEffect(() => {
     window.api.hasApiKey().then(setHasApiKey)
+    window.api.hasClaudeCli().then(setHasClaudeCli)
     loadCachedSummary()
-  }, [setHasApiKey, loadCachedSummary])
+  }, [setHasApiKey, setHasClaudeCli, loadCachedSummary])
 
   return (
     <div className="min-h-screen">
@@ -56,7 +59,11 @@ function App(): React.JSX.Element {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          {hasApiKey && <span className="text-[11px] text-[var(--sift-accent)]">Claude connected</span>}
+          {hasApiKey ? (
+            <span className="text-[11px] text-[var(--sift-accent)]">Claude connected</span>
+          ) : hasClaudeCli ? (
+            <span className="text-[11px] text-[var(--sift-accent)]">Claude CLI connected</span>
+          ) : null}
           <button
             onClick={() => setSettingsOpen(true)}
             className="size-8 rounded-lg border border-[var(--sift-border)] flex items-center justify-center text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"

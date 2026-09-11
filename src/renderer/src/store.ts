@@ -18,6 +18,7 @@ interface SiftState {
   duplicates: DuplicatesResult | null
   isScanningDuplicates: boolean
   hasApiKey: boolean
+  hasClaudeCli: boolean
   settingsOpen: boolean
   activeView: 'dashboard' | 'duplicates' | 'explore'
   toast: string | null
@@ -29,6 +30,7 @@ interface SiftState {
   isAskingAi: boolean
 
   setHasApiKey: (v: boolean) => void
+  setHasClaudeCli: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
   setActiveView: (v: 'dashboard' | 'duplicates' | 'explore') => void
   toggleSelected: (path: string) => void
@@ -60,6 +62,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   duplicates: null,
   isScanningDuplicates: false,
   hasApiKey: false,
+  hasClaudeCli: false,
   settingsOpen: false,
   activeView: 'dashboard',
   toast: null,
@@ -71,6 +74,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   isAskingAi: false,
 
   setHasApiKey: (v): void => set({ hasApiKey: v }),
+  setHasClaudeCli: (v): void => set({ hasClaudeCli: v }),
   setSettingsOpen: (v): void => set({ settingsOpen: v }),
   setActiveView: (v): void => set({ activeView: v }),
 

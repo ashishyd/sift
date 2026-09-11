@@ -69,8 +69,8 @@ export interface AiSuggestion {
     verdict: 'clear-it' | 'review-first' | 'keep'
     reason: string
   }>
-  /** 'claude' when Anthropic actually generated this; 'local' for the offline heuristic (no key, or Claude failed). */
-  source: 'claude' | 'local'
+  /** 'claude' = Anthropic API key; 'claude-cli' = the user's local, already-logged-in Claude Code CLI; 'local' = offline heuristic. */
+  source: 'claude' | 'claude-cli' | 'local'
   /** Set only when source is 'local' because a configured Claude call failed — not set when there's simply no key. */
   errorReason?: string
 }
