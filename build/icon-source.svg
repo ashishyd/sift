@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#171b26"/>
+      <stop offset="100%" stop-color="#0a0c12"/>
+    </linearGradient>
+    <linearGradient id="funnel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8ef2da"/>
+      <stop offset="100%" stop-color="#4fd9b8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#5ee6c8" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#5ee6c8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#glow)"/>
+  <rect x="0.5" y="0.5" width="1023" height="1023" rx="227.5" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>
+
+  <!-- funnel / sieve body -->
+  <path d="M300 336 L724 336 L588 560 L588 660 L436 660 L436 560 Z" fill="url(#funnel)"/>
+
+  <!-- mesh lines across the wide top of the funnel, suggesting a sieve -->
+  <g stroke="#0a0c12" stroke-width="14" stroke-linecap="round" opacity="0.55">
+    <line x1="332" y1="378" x2="692" y2="378"/>
+    <line x1="356" y1="420" x2="668" y2="420"/>
+    <line x1="380" y1="462" x2="644" y2="462"/>
+    <line x1="404" y1="504" x2="620" y2="504"/>
+  </g>
+
+  <!-- stem -->
+  <rect x="436" y="660" width="152" height="54" rx="16" fill="url(#funnel)"/>
+
+  <!-- filtered particles falling clear -->
+  <circle cx="512" cy="772" r="20" fill="#5ee6c8"/>
+  <circle cx="452" cy="826" r="13" fill="#5ee6c8" opacity="0.75"/>
+  <circle cx="576" cy="826" r="13" fill="#5ee6c8" opacity="0.75"/>
+  <circle cx="512" cy="872" r="9" fill="#5ee6c8" opacity="0.5"/>
+
+  <!-- AI sparkle accent -->
+  <path d="M718 260 L732 300 L772 314 L732 328 L718 368 L704 328 L664 314 L704 300 Z" fill="#ffffff" opacity="0.92"/>
+</svg>
