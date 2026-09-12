@@ -14,11 +14,20 @@ const RISK_TEXT_COLOR: Record<RiskLevel, string> = {
 function Chevron({ expanded }: { expanded: boolean }): React.JSX.Element {
   return (
     <svg
-      className={clsx('size-3 shrink-0 text-[var(--sift-text-muted)] transition-transform', expanded && 'rotate-90')}
+      className={clsx(
+        'size-3 shrink-0 text-[var(--sift-text-muted)] transition-transform',
+        expanded && 'rotate-90'
+      )}
       viewBox="0 0 24 24"
       fill="none"
     >
-      <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -121,7 +130,9 @@ function CategoryRow({
         <span className="font-medium text-[13.5px] truncate">{category.label}</span>
         <RiskBadge risk={category.risk} />
       </button>
-      <span className="text-[12px] text-[var(--sift-text-muted)] shrink-0">{category.items.length} item(s)</span>
+      <span className="text-[12px] text-[var(--sift-text-muted)] shrink-0">
+        {category.items.length} item(s)
+      </span>
       <span className="text-[13px] font-semibold tabular-nums w-20 text-right shrink-0">
         {formatBytes(category.totalSizeBytes)}
       </span>
@@ -141,7 +152,9 @@ export default function FolderTree(): React.JSX.Element {
   if (!summary) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center gap-3">
-        <p className="text-[13px] text-[var(--sift-text-muted)]">Scan your Mac first to explore its layout.</p>
+        <p className="text-[13px] text-[var(--sift-text-muted)]">
+          Scan your Mac first to explore what Sift found, folder by folder.
+        </p>
         <button
           onClick={runScan}
           disabled={isScanning}
@@ -159,7 +172,11 @@ export default function FolderTree(): React.JSX.Element {
     .sort((a, b) => b.totalSizeBytes - a.totalSizeBytes)
 
   if (categories.length === 0) {
-    return <p className="text-[13px] text-[var(--sift-text-muted)]">Nothing to show — your Mac looks clean.</p>
+    return (
+      <p className="text-[13px] text-[var(--sift-text-muted)]">
+        Nothing found in the places Sift checks — your Mac looks clean.
+      </p>
+    )
   }
 
   const toggleExpand = (id: string): void => {
@@ -172,6 +189,9 @@ export default function FolderTree(): React.JSX.Element {
   }
 
   const allExpanded = categories.every((c) => expanded.has(c.id))
+  const sizeMap = new Map<string, number>()
+  categories.forEach((c) => c.items.forEach((i) => sizeMap.set(i.path, i.sizeBytes)))
+  const selectedBytes = Array.from(selected).reduce((s, p) => s + (sizeMap.get(p) ?? 0), 0)
 
   return (
     <div className="space-y-3">
@@ -198,7 +218,9 @@ export default function FolderTree(): React.JSX.Element {
             </span>
           </div>
           <button
-            onClick={() => setExpanded(allExpanded ? new Set() : new Set(categories.map((c) => c.id)))}
+            onClick={() =>
+              setExpanded(allExpanded ? new Set() : new Set(categories.map((c) => c.id)))
+            }
             className="text-[12px] text-[var(--sift-accent)] hover:underline"
           >
             {allExpanded ? 'Collapse all' : 'Expand all'}
@@ -211,7 +233,11 @@ export default function FolderTree(): React.JSX.Element {
           const isExpanded = expanded.has(category.id)
           return (
             <div key={category.id}>
-              <CategoryRow category={category} expanded={isExpanded} onToggleExpand={() => toggleExpand(category.id)} />
+              <CategoryRow
+                category={category}
+                expanded={isExpanded}
+                onToggleExpand={() => toggleExpand(category.id)}
+              />
               {isExpanded && (
                 <div className="ml-[19px] pl-2 border-l border-[var(--sift-border)] mb-1">
                   {category.items.map((item) => (
@@ -226,7 +252,9 @@ export default function FolderTree(): React.JSX.Element {
 
       {selected.size > 0 && (
         <div className="flex items-center justify-between rounded-xl border border-[var(--sift-review)]/30 bg-[var(--sift-review)]/10 px-4 py-2.5">
-          <span className="text-[13px]">{selected.size} item(s) selected</span>
+          <span className="text-[13px]">
+            {selected.size} item(s) · {formatBytes(selectedBytes)} selected
+          </span>
           <div className="flex gap-2">
             <button
               onClick={trashSelected}

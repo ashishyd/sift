@@ -1,5 +1,11 @@
 import { create } from 'zustand'
-import type { AccessCheck, AiSuggestion, ClearHistoryEntry, DuplicatesResult, ScanSummary } from '@shared/types'
+import type {
+  AccessCheck,
+  AiSuggestion,
+  ClearHistoryEntry,
+  DuplicatesResult,
+  ScanSummary
+} from '@shared/types'
 import { formatBytes } from './lib/format'
 
 interface ScanProgress {
@@ -12,6 +18,7 @@ interface SiftState {
   summary: ScanSummary | null
   isScanning: boolean
   progress: ScanProgress | null
+  scanLog: string[]
   selected: Set<string>
   aiSuggestion: AiSuggestion | null
   isLoadingAi: boolean
@@ -56,6 +63,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   summary: null,
   isScanning: false,
   progress: null,
+  scanLog: [],
   selected: new Set(),
   aiSuggestion: null,
   isLoadingAi: false,
@@ -98,9 +106,24 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   },
 
   runScan: async (): Promise<void> => {
-    set({ isScanning: true, progress: null, aiSuggestion: null, aiChat: [], selected: new Set() })
+    set({
+      isScanning: true,
+      progress: null,
+      scanLog: [],
+      aiSuggestion: null,
+      aiChat: [],
+      selected: new Set()
+    })
     try {
-      const summary = await window.api.scan((p) => set({ progress: p }))
+      const summary = await window.api.scan((p) =>
+        set((state) => ({
+          progress: p,
+          scanLog:
+            state.progress && state.progress.label !== p.label
+              ? [...state.scanLog, state.progress.label]
+              : state.scanLog
+        }))
+      )
       set({ summary, isScanning: false, progress: null })
     } catch (err) {
       set({ isScanning: false, progress: null })
@@ -218,7 +241,11 @@ export const useSiftStore = create<SiftState>((set, get) => ({
         selected: nextSelected
       }
     })
-    get().showToast(paths.length === 1 ? 'Item ignored — won’t resurface on rescan' : `${paths.length} items ignored`)
+    get().showToast(
+      paths.length === 1
+        ? 'Item ignored — won’t resurface on rescan'
+        : `${paths.length} items ignored`
+    )
   },
 
   unignorePath: async (path): Promise<void> => {
@@ -242,7 +269,10 @@ export const useSiftStore = create<SiftState>((set, get) => ({
     set({ isAskingAi: true })
     try {
       const answer = await window.api.askAi(summary, question.trim())
-      set((state) => ({ aiChat: [...state.aiChat, { question: question.trim(), answer }], isAskingAi: false }))
+      set((state) => ({
+        aiChat: [...state.aiChat, { question: question.trim(), answer }],
+        isAskingAi: false
+      }))
     } catch (err) {
       set({ isAskingAi: false })
       get().showToast(err instanceof Error ? err.message : 'Could not ask Claude')

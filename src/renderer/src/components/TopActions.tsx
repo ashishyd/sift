@@ -24,7 +24,7 @@ export default function TopActions(): React.JSX.Element | null {
   const trashPaths = useSiftStore((s) => s.trashPaths)
 
   if (!summary) return null
-  const ranked = rankCategories(summary.categories).slice(0, 6)
+  const ranked = rankCategories(summary.categories).slice(0, 5)
   if (ranked.length === 0) return null
 
   const confidentTotal = summary.categories
@@ -39,8 +39,12 @@ export default function TopActions(): React.JSX.Element | null {
           Ranked by space freed and how confident Sift is it&apos;s safe.{' '}
           {confidentTotal > 0 && (
             <>
-              Clearing everything marked <span className="text-[var(--sift-safe)]">safe</span> alone would free{' '}
-              <span className="font-medium text-[var(--sift-text)]">{formatBytes(confidentTotal)}</span>.
+              Clearing everything marked <span className="text-[var(--sift-safe)]">safe</span> alone
+              would free{' '}
+              <span className="font-medium text-[var(--sift-text)]">
+                {formatBytes(confidentTotal)}
+              </span>
+              .
             </>
           )}
         </p>
@@ -50,7 +54,9 @@ export default function TopActions(): React.JSX.Element | null {
           const paths = c.items.map((i) => i.path)
           return (
             <li key={c.id} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="text-[12px] text-[var(--sift-text-muted)] tabular-nums w-4 shrink-0">{idx + 1}</span>
+              <span className="text-[12px] text-[var(--sift-text-muted)] tabular-nums w-4 shrink-0">
+                {idx + 1}
+              </span>
               <span className={clsx('size-2 rounded-full shrink-0', RISK_DOT[c.risk])} />
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-medium truncate">{c.label}</div>
@@ -58,7 +64,9 @@ export default function TopActions(): React.JSX.Element | null {
                   {c.items.length} item(s) · {c.description}
                 </div>
               </div>
-              <span className="text-[13px] font-semibold tabular-nums shrink-0">{formatBytes(c.totalSizeBytes)}</span>
+              <span className="text-[13px] font-semibold tabular-nums shrink-0">
+                {formatBytes(c.totalSizeBytes)}
+              </span>
               <button
                 onClick={() => {
                   selectAllInCategory(paths)

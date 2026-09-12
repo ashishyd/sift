@@ -11,6 +11,7 @@ export default function Dashboard(): React.JSX.Element {
   const summary = useSiftStore((s) => s.summary)
   const isScanning = useSiftStore((s) => s.isScanning)
   const progress = useSiftStore((s) => s.progress)
+  const scanLog = useSiftStore((s) => s.scanLog)
   const runScan = useSiftStore((s) => s.runScan)
   const selected = useSiftStore((s) => s.selected)
   const trashSelected = useSiftStore((s) => s.trashSelected)
@@ -21,10 +22,11 @@ export default function Dashboard(): React.JSX.Element {
       <div className="flex flex-col items-center justify-center h-[70vh] text-center gap-4">
         <img src={appIcon} alt="" className="size-16 rounded-[14px]" />
         <div>
-          <h2 className="font-semibold text-[18px]">Ready to sift through your disk</h2>
-          <p className="text-[13px] text-[var(--sift-text-muted)] mt-1 max-w-sm">
-            Sift checks known cache and dev-tool locations, old downloads, and large unused files — nothing is
-            deleted without your say-so.
+          <h2 className="font-semibold text-[18px]">Ready when you are</h2>
+          <p className="text-[13px] text-[var(--sift-text-muted)] mt-1 max-w-sm leading-relaxed">
+            Sift checks caches, dev-tool build files, old downloads and duplicates, then ranks
+            what&apos;s safe to clear. Nothing leaves your Mac permanently — everything goes to the
+            Trash first, so you can always get it back.
           </p>
         </div>
         <button
@@ -39,11 +41,32 @@ export default function Dashboard(): React.JSX.Element {
 
   if (isScanning) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-center gap-3">
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-5">
         <div className="size-8 border-2 border-[var(--sift-accent)] border-t-transparent rounded-full animate-spin" />
         <p className="text-[13.5px] text-[var(--sift-text-muted)]">
-          {progress ? `Scanning ${progress.label}… (${progress.done}/${progress.total})` : 'Starting scan…'}
+          {progress
+            ? `Scanning ${progress.label}… (${progress.done}/${progress.total})`
+            : 'Starting scan…'}
         </p>
+        {progress && (progress.done > 0 || scanLog.length > 0) && (
+          <ul className="flex flex-col gap-1.5 w-[280px]">
+            {[...scanLog, progress.label].map((label, idx) => {
+              const isDone = idx < scanLog.length
+              return (
+                <li
+                  key={`${label}-${idx}`}
+                  className={
+                    'flex items-center gap-2 text-[12.5px] ' +
+                    (isDone ? 'text-[var(--sift-safe)]' : 'text-[var(--sift-text)]')
+                  }
+                >
+                  <span className="w-3.5 text-center">{isDone ? '✓' : '›'}</span>
+                  {label}
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </div>
     )
   }
@@ -51,9 +74,17 @@ export default function Dashboard(): React.JSX.Element {
   if (!summary) return <></>
 
   const visibleCategories = summary.categories.filter((c) => !c.missing && c.items.length > 0)
+  const sizeMap = new Map<string, number>()
+  summary.categories.forEach((c) => c.items.forEach((i) => sizeMap.set(i.path, i.sizeBytes)))
+  const selectedBytes = Array.from(selected).reduce((s, p) => s + (sizeMap.get(p) ?? 0), 0)
 
   return (
     <div className="space-y-4">
+      <p className="text-[12px] text-[var(--sift-text-muted)]">
+        Clearing anything below moves it to the Trash — nothing is deleted until you empty it
+        yourself.
+      </p>
+
       <PermissionsBanner />
       <TopActions />
 
@@ -70,7 +101,7 @@ export default function Dashboard(): React.JSX.Element {
           </div>
           {visibleCategories.length === 0 && (
             <p className="text-[13px] text-[var(--sift-text-muted)]">
-              Nothing found in the categories Sift checks — your Mac looks clean.
+              Nothing found in the places Sift checks — your Mac looks clean.
             </p>
           )}
           {visibleCategories.map((c) => (
@@ -101,7 +132,10 @@ export default function Dashboard(): React.JSX.Element {
 
           {selected.size > 0 && (
             <div className="rounded-xl border border-[var(--sift-review)]/30 bg-[var(--sift-review)]/10 p-3.5 space-y-2">
-              <p className="text-[13px]">{selected.size} item(s) selected</p>
+              <p className="text-[13px]">
+                {selected.size} item(s) · {formatBytes(selectedBytes)} selected · moves to Trash,
+                recoverable
+              </p>
               <div className="flex gap-2">
                 <button
                   onClick={trashSelected}
@@ -113,7 +147,7 @@ export default function Dashboard(): React.JSX.Element {
                   onClick={clearSelected}
                   className="rounded-lg px-3 py-1.5 text-[12.5px] text-[var(--sift-text-muted)] hover:bg-white/5"
                 >
-                  Clear
+                  Deselect
                 </button>
               </div>
             </div>
