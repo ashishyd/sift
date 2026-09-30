@@ -18,11 +18,11 @@ export default function PermissionsBanner(): React.JSX.Element | null {
           Results for these may be incomplete.
         </p>
         <p className="text-[12px] text-[var(--sift-text-muted)] mt-0.5">
-          Grant access in System Settings → Privacy &amp; Security, then rescan.
+          Enable Sift under System Settings → Privacy &amp; Security → Full Disk Access, restart Sift, then rescan.
         </p>
         <div className="flex gap-3 mt-2">
           <button
-            onClick={() => openPrivacySettings('files')}
+            onClick={() => openPrivacySettings('full-disk-access')}
             className="text-[12.5px] font-medium text-[var(--sift-caution)] hover:underline"
           >
             Open Privacy Settings

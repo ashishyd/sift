@@ -3,7 +3,7 @@ import { readFileSync } from 'fs'
 import trayIconAsset from '../../resources/trayTemplate.png?asset'
 import trayIconAsset2x from '../../resources/trayTemplate@2x.png?asset'
 import { runFullScan } from './scanner'
-import { getIgnoredPaths } from './config'
+import { getIgnoredPaths, loadLastScan, saveLastScan } from './config'
 import type { ScanSummary } from '../shared/types'
 
 const BACKGROUND_SCAN_INTERVAL_MS = 4 * 60 * 60 * 1000 // 4 hours
@@ -24,14 +24,20 @@ function formatBytesShort(n: number): string {
   return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
 }
 
-export function getLastScanSummary(): ScanSummary | null {
+export async function getLastScanSummary(): Promise<ScanSummary | null> {
+  if (!lastSummary) lastSummary = await loadLastScan()
   return lastSummary
+}
+
+export function setLastScanSummary(summary: ScanSummary): void {
+  lastSummary = summary
 }
 
 async function runBackgroundScan(): Promise<void> {
   try {
     const ignored = await getIgnoredPaths()
     lastSummary = await runFullScan(undefined, ignored)
+    await saveLastScan(lastSummary)
     tray?.setTitle(` ${formatBytesShort(lastSummary.reclaimableBytes)}`)
   } catch {
     // background scan is best-effort — a failure here shouldn't surface anywhere disruptive
@@ -78,6 +84,13 @@ export function createTray(getMainWindow: () => BrowserWindow | null): Tray {
   }
 
   rebuildMenu()
+  loadLastScan().then((cached) => {
+    if (cached && !lastSummary) {
+      lastSummary = cached
+      tray?.setTitle(` ${formatBytesShort(cached.reclaimableBytes)}`)
+      rebuildMenu()
+    }
+  })
   tray.on('click', showWindow)
 
   setTimeout(() => {

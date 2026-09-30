@@ -1,7 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import type { ClearHistoryEntry } from '../shared/types'
+import type { ClearHistoryEntry, ScanSummary } from '../shared/types'
 
 const MAX_HISTORY_ENTRIES = 100
 
@@ -92,4 +92,40 @@ export async function appendClearHistory(entry: ClearHistoryEntry): Promise<void
   const history = await getClearHistory()
   const next = [entry, ...history].slice(0, MAX_HISTORY_ENTRIES)
   await patchConfig({ clearHistory: next })
+}
+
+function lastScanPath(): string {
+  return join(app.getPath('userData'), 'last-scan.json')
+}
+
+export async function saveLastScan(summary: ScanSummary): Promise<void> {
+  try {
+    await fs.mkdir(app.getPath('userData'), { recursive: true })
+    await fs.writeFile(lastScanPath(), JSON.stringify(summary), 'utf-8')
+  } catch {
+    // cache is best-effort
+  }
+}
+
+export async function loadLastScan(): Promise<ScanSummary | null> {
+  try {
+    return JSON.parse(await fs.readFile(lastScanPath(), 'utf-8')) as ScanSummary
+  } catch {
+    return null
+  }
+}
+
+/** Drops removed paths from the cached scan so a relaunch doesn't show items that are gone. */
+export async function pruneLastScan(removed: string[]): Promise<void> {
+  const summary = await loadLastScan()
+  if (!summary) return
+  const gone = new Set(removed)
+  const categories = summary.categories.map((c) => {
+    const items = c.items.filter((i) => !gone.has(i.path))
+    return { ...c, items, totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0) }
+  })
+  const reclaimableBytes = categories
+    .filter((c) => c.id !== 'trash')
+    .reduce((s, c) => s + c.totalSizeBytes, 0)
+  await saveLastScan({ ...summary, categories, reclaimableBytes })
 }

@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs'
+import { homedir } from 'os'
 import { basename, join } from 'path'
 import { run, isPermissionError, isPermissionErrno } from './exec'
 import { CATEGORY_DEFS, DEV_SEARCH_ROOTS } from './categories'
@@ -8,6 +9,19 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_ITEMS_PER_CATEGORY = 200
 
 type AccessState = 'ok' | 'denied' | 'missing'
+
+/** Reads a directory macOS only lets Full Disk Access holders list. */
+async function hasFullDiskAccess(): Promise<boolean> {
+  for (const probe of ['Library/Safari', 'Library/Mail', 'Library/Messages']) {
+    try {
+      await fs.readdir(join(homedir(), probe))
+      return true
+    } catch {
+      // ENOENT or EPERM — try the next probe
+    }
+  }
+  return false
+}
 
 async function accessState(p: string): Promise<AccessState> {
   try {
@@ -278,6 +292,11 @@ export async function runFullScan(
   onProgress?.('Stray node_modules', done, totalSteps)
   results.push(await scanNodeModules())
   done++
+
+  // With Full Disk Access, leftover EPERMs come from SIP-protected items, not a missing grant.
+  if (await hasFullDiskAccess()) {
+    for (const r of results) r.permissionDenied = false
+  }
 
   const filtered = applyIgnoredPaths(results, ignoredPaths)
   const vol = await volumeUsage()

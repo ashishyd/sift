@@ -67,6 +67,15 @@ export default function TopActions(): React.JSX.Element | null {
               <span className="text-[13px] font-semibold tabular-nums shrink-0">
                 {formatBytes(c.totalSizeBytes)}
               </span>
+              {paths[0] && (
+                <button
+                  onClick={() => window.api.revealInFinder(paths[0])}
+                  className="text-[12px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)] shrink-0"
+                  title="Show the largest item in Finder"
+                >
+                  Open in Finder
+                </button>
+              )}
               <button
                 onClick={() => {
                   selectAllInCategory(paths)

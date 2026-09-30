@@ -14,10 +14,13 @@ import {
   ignorePaths,
   unignorePath,
   getClearHistory,
-  appendClearHistory
+  appendClearHistory,
+  saveLastScan,
+  loadLastScan,
+  pruneLastScan
 } from './config'
 import { checkAllPermissions, openPrivacySettings, type PrivacyPane } from './permissions'
-import { createTray, getLastScanSummary } from './tray'
+import { createTray, getLastScanSummary, setLastScanSummary } from './tray'
 import type { ScanSummary } from '../shared/types'
 import type { Tray } from 'electron'
 
@@ -87,9 +90,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle('sift:scan', async (event) => {
     const ignored = await getIgnoredPaths()
-    return runFullScan((label, done, total) => {
+    const summary = await runFullScan((label, done, total) => {
       event.sender.send('sift:scan-progress', { label, done, total })
     }, ignored)
+    setLastScanSummary(summary)
+    await saveLastScan(summary)
+    return summary
   })
 
   ipcMain.handle('sift:findDuplicates', async () => {
@@ -99,6 +105,9 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:trash', async (_event, paths: string[]) => {
     const result = await moveToTrash(paths)
     if (result.succeeded.length > 0) {
+      await pruneLastScan(result.succeeded)
+      const pruned = await loadLastScan()
+      if (pruned) setLastScanSummary(pruned)
       await appendClearHistory({
         date: new Date().toISOString(),
         count: result.succeeded.length,

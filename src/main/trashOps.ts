@@ -1,9 +1,9 @@
+import { shell } from 'electron'
 import { promises as fs } from 'fs'
 import type { TrashResult } from '../shared/types'
 
 /** Moves paths to the macOS Trash (Finder-recoverable) — never a permanent delete. */
 export async function moveToTrash(paths: string[]): Promise<TrashResult> {
-  const { default: trash } = await import('trash')
   const succeeded: string[] = []
   const failed: Array<{ path: string; error: string }> = []
   let freedBytes = 0
@@ -11,7 +11,7 @@ export async function moveToTrash(paths: string[]): Promise<TrashResult> {
   for (const p of paths) {
     try {
       const size = await sizeOf(p)
-      await trash(p)
+      await shell.trashItem(p)
       succeeded.push(p)
       freedBytes += size
     } catch (err) {

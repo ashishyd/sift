@@ -97,6 +97,7 @@ export default function Dashboard(): React.JSX.Element {
               className="text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
             >
               Rescan
+              {summary ? ` · last scanned ${new Date(summary.scannedAt).toLocaleString()}` : ''}
             </button>
           </div>
           {visibleCategories.length === 0 && (
