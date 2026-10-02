@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import clsx from 'clsx'
 import type { CategoryResult, RiskLevel, ScanItem } from '@shared/types'
+import { categoryHiddenStats } from '@shared/preferences'
 import { formatBytes, formatRelativeDate } from '../lib/format'
 import { useSiftStore } from '../store'
 import RiskBadge from './RiskBadge'
@@ -53,45 +54,94 @@ function FileIcon(): React.JSX.Element {
   )
 }
 
-function ItemRow({ item }: { item: ScanItem }): React.JSX.Element {
+function ItemNode({ item, depth }: { item: ScanItem; depth: number }): React.JSX.Element {
   const selected = useSiftStore((s) => s.selected)
   const toggleSelected = useSiftStore((s) => s.toggleSelected)
   const ignoreItems = useSiftStore((s) => s.ignoreItems)
+  const loadFolder = useSiftStore((s) => s.loadFolder)
+  const folderCache = useSiftStore((s) => s.folderCache)
+  const [expanded, setExpanded] = useState(false)
+  const [loading, setLoading] = useState(false)
   const isSelected = selected.has(item.path)
+  const listing = folderCache[item.path]
+
+  const toggleExpand = async (): Promise<void> => {
+    if (!item.isDirectory) return
+    if (expanded) {
+      setExpanded(false)
+      return
+    }
+    setExpanded(true)
+    if (!listing) {
+      setLoading(true)
+      await loadFolder(item.path)
+      setLoading(false)
+    }
+  }
 
   return (
-    <div className="flex items-center gap-2 py-1.5 pr-2 rounded-lg hover:bg-white/[0.03] group">
-      <span className="w-[26px] shrink-0" />
-      <input
-        type="checkbox"
-        checked={isSelected}
-        onChange={() => toggleSelected(item.path)}
-        className="accent-[var(--sift-accent)] shrink-0"
-      />
-      {item.isDirectory ? <FolderIcon className="text-[var(--sift-text-muted)]" /> : <FileIcon />}
-      <span className="text-[13px] truncate flex-1" title={item.path}>
-        {item.name}
-      </span>
-      <span className="text-[11px] text-[var(--sift-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        modified {formatRelativeDate(item.lastModified)}
-      </span>
-      <span className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)] w-16 text-right shrink-0">
-        {formatBytes(item.sizeBytes)}
-      </span>
-      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 w-[90px] justify-end">
-        <button
-          onClick={() => window.api.revealInFinder(item.path)}
-          className="text-[11px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
-        >
-          Reveal
-        </button>
-        <button
-          onClick={() => ignoreItems([item.path])}
-          className="text-[11px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
-        >
-          Ignore
-        </button>
+    <div>
+      <div
+        className="flex items-center gap-2 py-1.5 pr-2 rounded-lg hover:bg-white/[0.03] group"
+        style={{ paddingLeft: depth * 14 }}
+      >
+        {item.isDirectory ? (
+          <button onClick={toggleExpand} className="shrink-0 p-0.5" aria-label="Expand folder">
+            <Chevron expanded={expanded} />
+          </button>
+        ) : (
+          <span className="w-[18px] shrink-0" />
+        )}
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => toggleSelected(item.path)}
+          className="accent-[var(--sift-accent)] shrink-0"
+        />
+        {item.isDirectory ? <FolderIcon className="text-[var(--sift-text-muted)]" /> : <FileIcon />}
+        <span className="text-[13px] truncate flex-1" title={item.path}>
+          {item.name}
+        </span>
+        <span className="text-[11px] text-[var(--sift-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          modified {formatRelativeDate(item.lastModified)}
+        </span>
+        <span className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)] w-16 text-right shrink-0">
+          {formatBytes(item.sizeBytes)}
+        </span>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 w-[90px] justify-end">
+          <button
+            onClick={() => window.api.revealInFinder(item.path)}
+            className="text-[11px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+          >
+            Reveal
+          </button>
+          <button
+            onClick={() => ignoreItems([item.path])}
+            className="text-[11px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+          >
+            Ignore
+          </button>
+        </div>
       </div>
+      {expanded && item.isDirectory && (
+        <div className="ml-[19px] border-l border-[var(--sift-border)]">
+          {loading && (
+            <p className="text-[12px] text-[var(--sift-text-muted)] py-1.5 pl-3">Loading…</p>
+          )}
+          {!loading && listing?.permissionDenied && (
+            <p className="text-[12px] text-[var(--sift-caution)] py-1.5 pl-3">
+              Permission denied for this folder.
+            </p>
+          )}
+          {!loading &&
+            listing?.entries.map((child) => (
+              <ItemNode key={child.path} item={child} depth={depth + 1} />
+            ))}
+          {!loading && listing && listing.entries.length === 0 && !listing.permissionDenied && (
+            <p className="text-[12px] text-[var(--sift-text-muted)] py-1.5 pl-3">Empty folder</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -111,6 +161,7 @@ function CategoryRow({
   const selectedCount = paths.filter((p) => selected.has(p)).length
   const allSelected = selectedCount === paths.length && paths.length > 0
   const someSelected = selectedCount > 0 && !allSelected
+  const hidden = categoryHiddenStats(category)
 
   return (
     <div className="flex items-center gap-2 py-2 pr-2 rounded-lg hover:bg-white/[0.03]">
@@ -131,7 +182,8 @@ function CategoryRow({
         <RiskBadge risk={category.risk} />
       </button>
       <span className="text-[12px] text-[var(--sift-text-muted)] shrink-0">
-        {category.items.length} item(s)
+        {category.matchedItemCount ?? category.items.length} item(s)
+        {hidden.count > 0 ? ` · ${category.items.length} listed` : ''}
       </span>
       <span className="text-[13px] font-semibold tabular-nums w-20 text-right shrink-0">
         {formatBytes(category.totalSizeBytes)}
@@ -147,6 +199,7 @@ export default function FolderTree(): React.JSX.Element {
   const selected = useSiftStore((s) => s.selected)
   const clearSelected = useSiftStore((s) => s.clearSelected)
   const trashSelected = useSiftStore((s) => s.trashSelected)
+  const emptyTrash = useSiftStore((s) => s.emptyTrash)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   if (!summary) {
@@ -192,6 +245,7 @@ export default function FolderTree(): React.JSX.Element {
   const sizeMap = new Map<string, number>()
   categories.forEach((c) => c.items.forEach((i) => sizeMap.set(i.path, i.sizeBytes)))
   const selectedBytes = Array.from(selected).reduce((s, p) => s + (sizeMap.get(p) ?? 0), 0)
+  const trashCategory = summary.categories.find((c) => c.id === 'trash' && c.totalSizeBytes > 0)
 
   return (
     <div className="space-y-3">
@@ -199,7 +253,7 @@ export default function FolderTree(): React.JSX.Element {
         <div>
           <h2 className="font-semibold text-[16px]">Explore</h2>
           <p className="text-[12.5px] text-[var(--sift-text-muted)] mt-0.5">
-            Everything Sift found, folder by folder. Expand a category, check what to clear.
+            Expand categories and folders — children are sized and sorted largest first.
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -217,6 +271,14 @@ export default function FolderTree(): React.JSX.Element {
               Review
             </span>
           </div>
+          {trashCategory && (
+            <button
+              onClick={emptyTrash}
+              className="text-[12px] font-medium text-[var(--sift-review)] hover:underline"
+            >
+              Empty Trash ({formatBytes(trashCategory.totalSizeBytes)})
+            </button>
+          )}
           <button
             onClick={() =>
               setExpanded(allExpanded ? new Set() : new Set(categories.map((c) => c.id)))
@@ -231,6 +293,7 @@ export default function FolderTree(): React.JSX.Element {
       <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-2">
         {categories.map((category) => {
           const isExpanded = expanded.has(category.id)
+          const hidden = categoryHiddenStats(category)
           return (
             <div key={category.id}>
               <CategoryRow
@@ -241,8 +304,14 @@ export default function FolderTree(): React.JSX.Element {
               {isExpanded && (
                 <div className="ml-[19px] pl-2 border-l border-[var(--sift-border)] mb-1">
                   {category.items.map((item) => (
-                    <ItemRow key={item.path} item={item} />
+                    <ItemNode key={item.path} item={item} depth={0} />
                   ))}
+                  {hidden.count > 0 && (
+                    <p className="text-[12px] text-[var(--sift-text-muted)] py-1.5 pl-7">
+                      +{hidden.count} more ({formatBytes(hidden.bytes)}) — list capped; totals include
+                      them
+                    </p>
+                  )}
                 </div>
               )}
             </div>

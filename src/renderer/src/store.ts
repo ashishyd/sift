@@ -1,9 +1,13 @@
 import { create } from 'zustand'
+import { computeReclaimableBytes } from '@shared/reclaimable'
 import type {
   AccessCheck,
   AiSuggestion,
   ClearHistoryEntry,
   DuplicatesResult,
+  FolderListing,
+  RiskLevel,
+  ScanPreferences,
   ScanSummary
 } from '@shared/types'
 import { formatBytes } from './lib/format'
@@ -35,6 +39,9 @@ interface SiftState {
   clearHistory: ClearHistoryEntry[] | null
   aiChat: Array<{ question: string; answer: string }>
   isAskingAi: boolean
+  scanPreferences: ScanPreferences | null
+  categoryDefs: Array<{ id: string; label: string; risk: RiskLevel }> | null
+  folderCache: Record<string, FolderListing>
 
   setHasApiKey: (v: boolean) => void
   setHasClaudeCli: (v: boolean) => void
@@ -44,10 +51,12 @@ interface SiftState {
   clearSelected: () => void
   selectAllInCategory: (paths: string[]) => void
   runScan: () => Promise<void>
+  cancelScan: () => Promise<void>
   runDuplicateScan: () => Promise<void>
   runAiSuggestion: () => Promise<void>
   trashSelected: () => Promise<void>
-  trashPaths: (paths: string[]) => Promise<void>
+  trashPaths: (paths: string[], opts?: { skipConfirm?: boolean }) => Promise<void>
+  emptyTrash: () => Promise<void>
   showToast: (msg: string) => void
   refreshPermissions: () => Promise<void>
   openPrivacySettings: (pane: 'files' | 'full-disk-access') => Promise<void>
@@ -57,6 +66,25 @@ interface SiftState {
   refreshClearHistory: () => Promise<void>
   askAi: (question: string) => Promise<void>
   loadCachedSummary: () => Promise<void>
+  loadScanPreferences: () => Promise<void>
+  saveScanPreferences: (prefs: Partial<ScanPreferences>) => Promise<void>
+  loadCategoryDefs: () => Promise<void>
+  loadFolder: (path: string) => Promise<FolderListing | null>
+}
+
+function pruneDuplicates(
+  duplicates: DuplicatesResult | null,
+  trashed: Set<string>
+): DuplicatesResult | null {
+  if (!duplicates) return null
+  const groups = duplicates.groups
+    .map((g) => ({ ...g, files: g.files.filter((f) => !trashed.has(f)) }))
+    .filter((g) => g.files.length > 1)
+  return {
+    ...duplicates,
+    groups,
+    reclaimableBytes: groups.reduce((s, g) => s + g.sizeBytes * (g.files.length - 1), 0)
+  }
 }
 
 export const useSiftStore = create<SiftState>((set, get) => ({
@@ -80,6 +108,9 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   clearHistory: null,
   aiChat: [],
   isAskingAi: false,
+  scanPreferences: null,
+  categoryDefs: null,
+  folderCache: {},
 
   setHasApiKey: (v): void => set({ hasApiKey: v }),
   setHasClaudeCli: (v): void => set({ hasClaudeCli: v }),
@@ -112,7 +143,8 @@ export const useSiftStore = create<SiftState>((set, get) => ({
       scanLog: [],
       aiSuggestion: null,
       aiChat: [],
-      selected: new Set()
+      selected: new Set(),
+      folderCache: {}
     })
     try {
       const summary = await window.api.scan((p) =>
@@ -127,8 +159,18 @@ export const useSiftStore = create<SiftState>((set, get) => ({
       set({ summary, isScanning: false, progress: null })
     } catch (err) {
       set({ isScanning: false, progress: null })
-      get().showToast(err instanceof Error ? err.message : 'Scan failed')
+      const message = err instanceof Error ? err.message : 'Scan failed'
+      if (message === 'Scan cancelled' || (err instanceof Error && err.name === 'ScanCancelledError')) {
+        get().showToast('Scan cancelled')
+        return
+      }
+      get().showToast(message)
     }
+  },
+
+  cancelScan: async (): Promise<void> => {
+    if (!get().isScanning) return
+    await window.api.cancelScan()
   },
 
   runDuplicateScan: async (): Promise<void> => {
@@ -160,49 +202,113 @@ export const useSiftStore = create<SiftState>((set, get) => ({
     await get().trashPaths(paths)
   },
 
-  trashPaths: async (paths): Promise<void> => {
+  trashPaths: async (paths, opts): Promise<void> => {
     if (paths.length === 0) return
     const sizeMap = new Map<string, number>()
-    const { summary } = get()
+    const { summary, folderCache } = get()
     summary?.categories.forEach((c) => c.items.forEach((i) => sizeMap.set(i.path, i.sizeBytes)))
+    Object.values(folderCache).forEach((listing) =>
+      listing.entries.forEach((i) => sizeMap.set(i.path, i.sizeBytes))
+    )
     const totalSize = paths.reduce((s, p) => s + (sizeMap.get(p) ?? 0), 0)
-    const confirmed = await window.api.confirmTrash(paths.length, formatBytes(totalSize))
-    if (!confirmed) return
-
+    if (!opts?.skipConfirm) {
+      const confirmed = await window.api.confirmTrash(paths.length, formatBytes(totalSize))
+      if (!confirmed) return
+    }
     const result = await window.api.trash(paths)
     if (result.failed.length > 0) {
-      get().showToast(`Moved ${result.succeeded.length}, failed ${result.failed.length}`)
+      const sample = result.failed
+        .slice(0, 2)
+        .map((f) => `${f.path.split('/').pop()}: ${f.error}`)
+        .join(' · ')
+      get().showToast(
+        `Moved ${result.succeeded.length}, failed ${result.failed.length}${sample ? ` — ${sample}` : ''}`
+      )
     } else {
       get().showToast(`Moved ${result.succeeded.length} item(s) to Trash`)
     }
 
     const trashedSet = new Set(result.succeeded)
     set((state) => {
-      if (!state.summary) return {}
-      const categories = state.summary.categories.map((c) => ({
-        ...c,
-        items: c.items.filter((i) => !trashedSet.has(i.path)),
-        totalSizeBytes: c.items
-          .filter((i) => !trashedSet.has(i.path))
+      const nextFolderCache = { ...state.folderCache }
+      for (const [dir, listing] of Object.entries(nextFolderCache)) {
+        nextFolderCache[dir] = {
+          ...listing,
+          entries: listing.entries.filter((e) => !trashedSet.has(e.path))
+        }
+      }
+
+      if (!state.summary) {
+        return {
+          duplicates: pruneDuplicates(state.duplicates, trashedSet),
+          folderCache: nextFolderCache,
+          selected: new Set([...state.selected].filter((p) => !trashedSet.has(p)))
+        }
+      }
+
+      const categories = state.summary.categories.map((c) => {
+        const before = c.items.length
+        const items = c.items.filter((i) => !trashedSet.has(i.path))
+        const removed = before - items.length
+        const removedBytes = c.items
+          .filter((i) => trashedSet.has(i.path))
           .reduce((s, i) => s + i.sizeBytes, 0)
-      }))
-      const reclaimableBytes = categories
-        .filter((c) => c.id !== 'trash')
-        .reduce((s, c) => s + c.totalSizeBytes, 0)
+        return {
+          ...c,
+          items,
+          totalSizeBytes: Math.max(0, c.totalSizeBytes - removedBytes),
+          matchedItemCount: Math.max(0, (c.matchedItemCount ?? before) - removed)
+        }
+      })
       const nextSelected = new Set(state.selected)
       trashedSet.forEach((p) => nextSelected.delete(p))
       return {
-        summary: { ...state.summary, categories, reclaimableBytes },
-        selected: nextSelected
+        summary: {
+          ...state.summary,
+          categories,
+          reclaimableBytes: computeReclaimableBytes(categories)
+        },
+        selected: nextSelected,
+        duplicates: pruneDuplicates(state.duplicates, trashedSet),
+        folderCache: nextFolderCache
       }
     })
+  },
+
+  emptyTrash: async (): Promise<void> => {
+    const trash = get().summary?.categories.find((c) => c.id === 'trash')
+    const sizeLabel = formatBytes(trash?.totalSizeBytes ?? 0)
+    const confirmed = await window.api.confirmEmptyTrash(sizeLabel)
+    if (!confirmed) return
+    try {
+      const result = await window.api.emptyTrash()
+      set((state) => {
+        if (!state.summary) return {}
+        const categories = state.summary.categories.map((c) =>
+          c.id === 'trash'
+            ? { ...c, items: [], totalSizeBytes: 0, matchedItemCount: 0, missing: false }
+            : c
+        )
+        return {
+          summary: {
+            ...state.summary,
+            categories,
+            reclaimableBytes: computeReclaimableBytes(categories)
+          }
+        }
+      })
+      get().showToast(`Emptied Trash · freed ${formatBytes(result.freedBytes)}`)
+      get().refreshClearHistory()
+    } catch (err) {
+      get().showToast(err instanceof Error ? err.message : 'Could not empty Trash')
+    }
   },
 
   showToast: (msg): void => {
     set({ toast: msg })
     setTimeout(() => {
       if (get().toast === msg) set({ toast: null })
-    }, 4000)
+    }, 4500)
   },
 
   refreshPermissions: async (): Promise<void> => {
@@ -227,17 +333,25 @@ export const useSiftStore = create<SiftState>((set, get) => ({
     set((state) => {
       if (!state.summary) return { ignoredPaths }
       const categories = state.summary.categories.map((c) => {
+        const before = c.items.length
         const items = c.items.filter((i) => !ignoredSet.has(i.path))
-        return { ...c, items, totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0) }
+        const removed = before - items.length
+        return {
+          ...c,
+          items,
+          totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0),
+          matchedItemCount: Math.max(0, (c.matchedItemCount ?? before) - removed)
+        }
       })
-      const reclaimableBytes = categories
-        .filter((c) => c.id !== 'trash')
-        .reduce((s, c) => s + c.totalSizeBytes, 0)
       const nextSelected = new Set(state.selected)
       ignoredSet.forEach((p) => nextSelected.delete(p))
       return {
         ignoredPaths,
-        summary: { ...state.summary, categories, reclaimableBytes },
+        summary: {
+          ...state.summary,
+          categories,
+          reclaimableBytes: computeReclaimableBytes(categories)
+        },
         selected: nextSelected
       }
     })
@@ -283,5 +397,35 @@ export const useSiftStore = create<SiftState>((set, get) => ({
     if (get().summary) return
     const cached = await window.api.getLastScanSummary()
     if (cached && !get().summary) set({ summary: cached })
+  },
+
+  loadScanPreferences: async (): Promise<void> => {
+    const scanPreferences = await window.api.getScanPreferences()
+    set({ scanPreferences })
+  },
+
+  saveScanPreferences: async (prefs): Promise<void> => {
+    const scanPreferences = await window.api.setScanPreferences(prefs)
+    set({ scanPreferences })
+    get().showToast('Scan settings saved — apply on next scan')
+  },
+
+  loadCategoryDefs: async (): Promise<void> => {
+    if (get().categoryDefs) return
+    const categoryDefs = await window.api.getCategoryDefs()
+    set({ categoryDefs })
+  },
+
+  loadFolder: async (path): Promise<FolderListing | null> => {
+    const cached = get().folderCache[path]
+    if (cached) return cached
+    try {
+      const listing = await window.api.listFolder(path)
+      set((state) => ({ folderCache: { ...state.folderCache, [path]: listing } }))
+      return listing
+    } catch (err) {
+      get().showToast(err instanceof Error ? err.message : 'Could not open folder')
+      return null
+    }
   }
 }))

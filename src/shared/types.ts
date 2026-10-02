@@ -27,6 +27,8 @@ export interface CategoryResult {
   risk: RiskLevel
   totalSizeBytes: number
   items: ScanItem[]
+  /** Total matches before the per-category list cap (may exceed items.length). */
+  matchedItemCount: number
   missing: boolean
   /** true if scanning hit an EPERM/EACCES (TCC privacy) error — results may be incomplete. */
   permissionDenied: boolean
@@ -45,8 +47,18 @@ export interface ScanSummary {
   scannedAt: string
   volumeTotalBytes: number
   volumeFreeBytes: number
+  /** Mounted local volumes (APFS/HFS+/exFAT etc.), root first. */
+  volumes: VolumeInfo[]
   categories: CategoryResult[]
   reclaimableBytes: number
+}
+
+export interface VolumeInfo {
+  mountPoint: string
+  /** Device identifier from df, e.g. /dev/disk3s1 */
+  device: string
+  totalBytes: number
+  freeBytes: number
 }
 
 export interface DuplicateGroup {
@@ -89,4 +101,23 @@ export interface ClearHistoryEntry {
   date: string
   count: number
   freedBytes: number
+}
+
+/** User-tunable scan / tray preferences persisted in config.json. */
+export interface ScanPreferences {
+  largeFileMinMb: number
+  largeFileMinAgeDays: number
+  downloadsMinAgeDays: number
+  logsMinAgeDays: number
+  messagesMinAgeDays: number
+  mailMinAgeDays: number
+  archivesMinAgeDays: number
+  backgroundScanHours: number
+  disabledCategoryIds: string[]
+}
+
+export interface FolderListing {
+  path: string
+  entries: ScanItem[]
+  permissionDenied: boolean
 }

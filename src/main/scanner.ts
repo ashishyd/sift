@@ -3,10 +3,42 @@ import { homedir } from 'os'
 import { basename, join } from 'path'
 import { run, isPermissionError, isPermissionErrno } from './exec'
 import { CATEGORY_DEFS, DEV_SEARCH_ROOTS } from './categories'
-import type { CategoryResult, ScanItem, ScanSummary } from '../shared/types'
+import {
+  USER_CACHES_DEDICATED_NAMES,
+  computeReclaimableBytes,
+  dedupeOverlappingCategoryPaths
+} from '../shared/reclaimable'
+import { normalizeScanPreferences } from '../shared/preferences'
+import type {
+  CategoryResult,
+  FolderListing,
+  ScanItem,
+  ScanPreferences,
+  ScanSummary
+} from '../shared/types'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_ITEMS_PER_CATEGORY = 200
+const MAX_FOLDER_LISTING = 400
+
+/** Coalesce concurrent full scans (tray + UI) onto one in-flight run. */
+let inFlightScan: Promise<ScanSummary> | null = null
+let cancelRequested = false
+
+export class ScanCancelledError extends Error {
+  constructor() {
+    super('Scan cancelled')
+    this.name = 'ScanCancelledError'
+  }
+}
+
+export function requestScanCancel(): void {
+  cancelRequested = true
+}
+
+function throwIfCancelled(): void {
+  if (cancelRequested) throw new ScanCancelledError()
+}
 
 type AccessState = 'ok' | 'denied' | 'missing'
 
@@ -43,7 +75,9 @@ async function duBytes(p: string): Promise<{ bytes: number; denied: boolean }> {
   }
 }
 
-async function statItem(p: string): Promise<{ mtime: string | null; atime: string | null; size: number; isDir: boolean }> {
+async function statItem(
+  p: string
+): Promise<{ mtime: string | null; atime: string | null; size: number; isDir: boolean }> {
   try {
     const st = await fs.stat(p)
     return {
@@ -63,6 +97,44 @@ function olderThanDays(iso: string | null, days: number | undefined): boolean {
   return Date.now() - new Date(iso).getTime() > days * DAY_MS
 }
 
+function resolveMinAgeDays(id: string, fallback: number | undefined, prefs: ScanPreferences): number | undefined {
+  switch (id) {
+    case 'downloads-old':
+      return prefs.downloadsMinAgeDays
+    case 'logs':
+      return prefs.logsMinAgeDays
+    case 'messages-attachments':
+      return prefs.messagesMinAgeDays
+    case 'mail-downloads':
+      return prefs.mailMinAgeDays
+    case 'xcode-archives':
+      return prefs.archivesMinAgeDays
+    case 'large-files':
+      return prefs.largeFileMinAgeDays
+    default:
+      return fallback
+  }
+}
+
+function emptyCategory(
+  id: string,
+  label: string,
+  description: string,
+  risk: CategoryResult['risk']
+): CategoryResult {
+  return {
+    id,
+    label,
+    description,
+    risk,
+    totalSizeBytes: 0,
+    items: [],
+    matchedItemCount: 0,
+    missing: true,
+    permissionDenied: false
+  }
+}
+
 /** Scan a first-level-listing category (App Caches, npm cache, Downloads, ...). */
 async function scanShallowCategory(
   id: string,
@@ -77,6 +149,7 @@ async function scanShallowCategory(
   let permissionDenied = false
 
   for (const root of paths) {
+    throwIfCancelled()
     const state = await accessState(root)
     if (state === 'missing') continue
     anyExists = true
@@ -94,6 +167,8 @@ async function scanShallowCategory(
     }
     for (const name of entries) {
       if (name === '.DS_Store') continue
+      // Dedicated categories already cover Homebrew/Yarn under ~/Library/Caches.
+      if (id === 'user-caches' && USER_CACHES_DEDICATED_NAMES.has(name)) continue
       const full = join(root, name)
       const st = await statItem(full)
       const refDate = st.mtime ?? st.atime
@@ -119,6 +194,7 @@ async function scanShallowCategory(
   }
 
   items.sort((a, b) => b.sizeBytes - a.sizeBytes)
+  const matchedItemCount = items.length
   const trimmed = items.slice(0, MAX_ITEMS_PER_CATEGORY)
   return {
     id,
@@ -127,6 +203,7 @@ async function scanShallowCategory(
     risk,
     totalSizeBytes: items.reduce((sum, it) => sum + it.sizeBytes, 0),
     items: trimmed,
+    matchedItemCount,
     missing: !anyExists,
     permissionDenied
   }
@@ -138,6 +215,7 @@ async function scanNodeModules(): Promise<CategoryResult> {
   let permissionDenied = false
 
   for (const root of DEV_SEARCH_ROOTS) {
+    throwIfCancelled()
     if ((await accessState(root)) !== 'ok') continue
     const { stdout, stderr } = await run('find', [
       root,
@@ -159,6 +237,7 @@ async function scanNodeModules(): Promise<CategoryResult> {
 
   const items: ScanItem[] = []
   for (const dir of found) {
+    throwIfCancelled()
     const st = await statItem(dir)
     const du = await duBytes(dir)
     if (du.denied) permissionDenied = true
@@ -173,6 +252,7 @@ async function scanNodeModules(): Promise<CategoryResult> {
     })
   }
   items.sort((a, b) => b.sizeBytes - a.sizeBytes)
+  const matchedItemCount = items.length
   return {
     id: def.id,
     label: def.label,
@@ -180,17 +260,21 @@ async function scanNodeModules(): Promise<CategoryResult> {
     risk: def.risk,
     totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0),
     items: items.slice(0, MAX_ITEMS_PER_CATEGORY),
+    matchedItemCount,
     missing: items.length === 0,
     permissionDenied
   }
 }
 
-async function scanLargeFiles(): Promise<CategoryResult> {
+async function scanLargeFiles(prefs: ScanPreferences): Promise<CategoryResult> {
   const def = CATEGORY_DEFS.find((c) => c.id === 'large-files')!
   const items: ScanItem[] = []
   let permissionDenied = false
+  const minAge = resolveMinAgeDays(def.id, def.minAgeDays, prefs) ?? 180
+  const sizeKb = `${prefs.largeFileMinMb * 1024}k`
 
   for (const root of def.paths) {
+    throwIfCancelled()
     const state = await accessState(root)
     if (state === 'missing') continue
     if (state === 'denied') {
@@ -202,9 +286,9 @@ async function scanLargeFiles(): Promise<CategoryResult> {
       '-type',
       'f',
       '-size',
-      '+204800k',
+      `+${sizeKb}`,
       '-mtime',
-      `+${def.minAgeDays ?? 180}`
+      `+${minAge}`
     ])
     if (isPermissionError(stderr)) permissionDenied = true
     const files = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -222,6 +306,68 @@ async function scanLargeFiles(): Promise<CategoryResult> {
   }
 
   items.sort((a, b) => b.sizeBytes - a.sizeBytes)
+  const matchedItemCount = items.length
+  const trimmed = items.slice(0, MAX_ITEMS_PER_CATEGORY)
+  return {
+    id: def.id,
+    label: def.label,
+    description: `Files over ${prefs.largeFileMinMb}MB across Desktop, Documents and Downloads, untouched for ${minAge}+ days.`,
+    risk: def.risk,
+    totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0),
+    items: trimmed,
+    matchedItemCount,
+    missing: items.length === 0,
+    permissionDenied
+  }
+}
+
+async function scanOrphanedDmgs(): Promise<CategoryResult> {
+  const def = CATEGORY_DEFS.find((c) => c.id === 'orphaned-dmgs')!
+  const items: ScanItem[] = []
+  let permissionDenied = false
+  const minAge = def.minAgeDays ?? 30
+  const extensions = ['*.dmg', '*.iso', '*.pkg']
+
+  for (const root of def.paths) {
+    throwIfCancelled()
+    const state = await accessState(root)
+    if (state === 'missing') continue
+    if (state === 'denied') {
+      permissionDenied = true
+      continue
+    }
+    for (const pattern of extensions) {
+      const { stdout, stderr } = await run('find', [
+        root,
+        '-maxdepth',
+        '3',
+        '-type',
+        'f',
+        '-iname',
+        pattern,
+        '-mtime',
+        `+${minAge}`
+      ])
+      if (isPermissionError(stderr)) permissionDenied = true
+      const files = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+      for (const f of files) {
+        if (items.some((i) => i.path === f)) continue
+        const st = await statItem(f)
+        if (st.size <= 0) continue
+        items.push({
+          path: f,
+          name: basename(f),
+          sizeBytes: st.size,
+          isDirectory: false,
+          lastAccessed: st.atime,
+          lastModified: st.mtime
+        })
+      }
+    }
+  }
+
+  items.sort((a, b) => b.sizeBytes - a.sizeBytes)
+  const matchedItemCount = items.length
   return {
     id: def.id,
     label: def.label,
@@ -229,86 +375,255 @@ async function scanLargeFiles(): Promise<CategoryResult> {
     risk: def.risk,
     totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0),
     items: items.slice(0, MAX_ITEMS_PER_CATEGORY),
+    matchedItemCount,
     missing: items.length === 0,
     permissionDenied
   }
 }
 
-async function volumeUsage(): Promise<{ total: number; free: number }> {
-  const { stdout } = await run('df', ['-k', '/'])
-  try {
-    const line = stdout.trim().split('\n')[1]
+/** Parse `df -k` output into local mounted volumes. Exported for tests. */
+export function parseDfOutput(stdout: string): Array<{
+  device: string
+  totalBytes: number
+  freeBytes: number
+  mountPoint: string
+}> {
+  const lines = stdout.trim().split('\n').slice(1)
+  const volumes: Array<{
+    device: string
+    totalBytes: number
+    freeBytes: number
+    mountPoint: string
+  }> = []
+
+  for (const line of lines) {
     const parts = line.trim().split(/\s+/)
+    if (parts.length < 9) continue
+    const device = parts[0]
     const totalKb = parseInt(parts[1], 10)
     const availKb = parseInt(parts[3], 10)
-    return { total: totalKb * 1024, free: availKb * 1024 }
-  } catch {
-    return { total: 0, free: 0 }
+    const mountPoint = parts.slice(8).join(' ')
+    if (!device.startsWith('/dev/')) continue
+    if (mountPoint !== '/' && !mountPoint.startsWith('/Volumes/')) continue
+    if (!Number.isFinite(totalKb) || totalKb <= 0) continue
+    volumes.push({
+      device,
+      totalBytes: totalKb * 1024,
+      freeBytes: Math.max(0, availKb * 1024),
+      mountPoint
+    })
+  }
+
+  const byMount = new Map<string, (typeof volumes)[0]>()
+  for (const v of volumes) {
+    const prev = byMount.get(v.mountPoint)
+    if (!prev || v.totalBytes > prev.totalBytes) byMount.set(v.mountPoint, v)
+  }
+
+  return Array.from(byMount.values()).sort((a, b) => {
+    if (a.mountPoint === '/') return -1
+    if (b.mountPoint === '/') return 1
+    return a.mountPoint.localeCompare(b.mountPoint)
+  })
+}
+
+async function listVolumes(): Promise<{
+  total: number
+  free: number
+  volumes: Array<{ device: string; totalBytes: number; freeBytes: number; mountPoint: string }>
+}> {
+  const { stdout } = await run('df', ['-k'])
+  const volumes = parseDfOutput(stdout)
+  const root = volumes.find((v) => v.mountPoint === '/') ?? volumes[0]
+  return {
+    total: root?.totalBytes ?? 0,
+    free: root?.freeBytes ?? 0,
+    volumes
   }
 }
 
 /**
- * Downloads/Desktop/Documents are macOS's per-app "protected folder" TCC categories — the
- * first read attempt triggers the native consent dialog. Scanning them first (instead of,
- * say, buried in the middle of the Library caches loop) means any prompt shows up while the
- * progress label plainly says "Old Downloads" or "Large & Unused Files", not mid-cache-scan.
+ * Downloads/Desktop/Documents/Pictures are macOS per-app TCC-protected folders —
+ * the first read triggers the native consent dialog. Scanning those shallow
+ * categories before Large Files means any prompt appears while the progress
+ * label names the protected folder, not "Large & Unused Files".
  */
 const TCC_SENSITIVE_FIRST = ['downloads-old', 'pictures-library']
+
+const SPECIAL_SCAN_IDS = new Set(['node-modules', 'large-files', 'orphaned-dmgs'])
+
+const BUNDLE_SUFFIXES = ['.app', '.photoslibrary', '.framework', '.bundle', '.plugin']
+
+function isOpaqueBundle(name: string): boolean {
+  const lower = name.toLowerCase()
+  return BUNDLE_SUFFIXES.some((s) => lower.endsWith(s))
+}
 
 /** Drop previously-ignored items and recompute each category's total. */
 export function applyIgnoredPaths(results: CategoryResult[], ignoredPaths: string[]): CategoryResult[] {
   if (ignoredPaths.length === 0) return results
   const ignored = new Set(ignoredPaths)
   return results.map((c) => {
+    const before = c.items.length
     const items = c.items.filter((i) => !ignored.has(i.path))
-    return { ...c, items, totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0) }
+    const removed = before - items.length
+    return {
+      ...c,
+      items,
+      totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0),
+      matchedItemCount: Math.max(0, (c.matchedItemCount ?? before) - removed)
+    }
   })
 }
 
-export async function runFullScan(
+/** Lazy size-sorted listing for Explore drill-down. */
+export async function listFolder(dirPath: string): Promise<FolderListing> {
+  const entries: ScanItem[] = []
+  let permissionDenied = false
+
+  let names: string[]
+  try {
+    names = await fs.readdir(dirPath)
+  } catch (err) {
+    if (isPermissionErrno(err)) {
+      return { path: dirPath, entries: [], permissionDenied: true }
+    }
+    return { path: dirPath, entries: [], permissionDenied: false }
+  }
+
+  for (const name of names) {
+    if (name === '.DS_Store' || name.startsWith('.')) continue
+    const full = join(dirPath, name)
+    const st = await statItem(full)
+    let size: number
+    const treatAsFile = !st.isDir || isOpaqueBundle(name)
+    if (!treatAsFile) {
+      const du = await duBytes(full)
+      size = du.bytes
+      if (du.denied) permissionDenied = true
+    } else {
+      if (st.isDir) {
+        const du = await duBytes(full)
+        size = du.bytes
+        if (du.denied) permissionDenied = true
+      } else {
+        size = st.size
+      }
+    }
+    if (size <= 0 && !st.isDir) continue
+    entries.push({
+      path: full,
+      name,
+      sizeBytes: size,
+      isDirectory: st.isDir && !isOpaqueBundle(name),
+      lastAccessed: st.atime,
+      lastModified: st.mtime
+    })
+  }
+
+  entries.sort((a, b) => b.sizeBytes - a.sizeBytes)
+  return {
+    path: dirPath,
+    entries: entries.slice(0, MAX_FOLDER_LISTING),
+    permissionDenied
+  }
+}
+
+async function doFullScan(
   onProgress?: (label: string, done: number, total: number) => void,
-  ignoredPaths: string[] = []
+  ignoredPaths: string[] = [],
+  prefsInput?: ScanPreferences
 ): Promise<ScanSummary> {
-  const allShallow = CATEGORY_DEFS.filter((c) => c.id !== 'node-modules' && c.id !== 'large-files')
+  const prefs = normalizeScanPreferences(prefsInput)
+  const disabled = new Set(prefs.disabledCategoryIds)
+
+  const allShallow = CATEGORY_DEFS.filter((c) => !SPECIAL_SCAN_IDS.has(c.id) && !disabled.has(c.id))
   const priorityShallow = allShallow.filter((c) => TCC_SENSITIVE_FIRST.includes(c.id))
   const restShallow = allShallow.filter((c) => !TCC_SENSITIVE_FIRST.includes(c.id))
+  const includeLarge = !disabled.has('large-files')
+  const includeNode = !disabled.has('node-modules')
+  const includeDmgs = !disabled.has('orphaned-dmgs')
 
-  const totalSteps = allShallow.length + 2
+  const totalSteps =
+    allShallow.length + (includeLarge ? 1 : 0) + (includeNode ? 1 : 0) + (includeDmgs ? 1 : 0)
   let done = 0
   const results: CategoryResult[] = []
 
-  onProgress?.('Large & Unused Files', done, totalSteps)
-  results.push(await scanLargeFiles())
-  done++
-
   for (const def of [...priorityShallow, ...restShallow]) {
+    throwIfCancelled()
     onProgress?.(def.label, done, totalSteps)
+    const minAge = resolveMinAgeDays(def.id, def.minAgeDays, prefs)
     results.push(
-      await scanShallowCategory(def.id, def.label, def.description, def.risk, def.paths, def.minAgeDays)
+      await scanShallowCategory(def.id, def.label, def.description, def.risk, def.paths, minAge)
     )
     done++
   }
 
-  onProgress?.('Stray node_modules', done, totalSteps)
-  results.push(await scanNodeModules())
-  done++
+  if (includeDmgs) {
+    throwIfCancelled()
+    onProgress?.('Old Disk Images', done, totalSteps)
+    results.push(await scanOrphanedDmgs())
+    done++
+  }
+
+  if (includeLarge) {
+    throwIfCancelled()
+    onProgress?.('Large & Unused Files', done, totalSteps)
+    results.push(await scanLargeFiles(prefs))
+    done++
+  }
+
+  if (includeNode) {
+    throwIfCancelled()
+    onProgress?.('Stray node_modules', done, totalSteps)
+    results.push(await scanNodeModules())
+    done++
+  }
+
+  // Keep disabled categories visible as empty so UI/settings stay consistent.
+  for (const def of CATEGORY_DEFS) {
+    if (!disabled.has(def.id)) continue
+    if (results.some((r) => r.id === def.id)) continue
+    results.push(emptyCategory(def.id, def.label, def.description, def.risk))
+  }
 
   // With Full Disk Access, leftover EPERMs come from SIP-protected items, not a missing grant.
   if (await hasFullDiskAccess()) {
     for (const r of results) r.permissionDenied = false
   }
 
-  const filtered = applyIgnoredPaths(results, ignoredPaths)
-  const vol = await volumeUsage()
-  const reclaimable = filtered
-    .filter((r) => r.id !== 'trash')
-    .reduce((s, r) => s + r.totalSizeBytes, 0)
+  const deduped = dedupeOverlappingCategoryPaths(results)
+  const filtered = applyIgnoredPaths(deduped, ignoredPaths)
+  const vol = await listVolumes()
 
   return {
     scannedAt: new Date().toISOString(),
     volumeTotalBytes: vol.total,
     volumeFreeBytes: vol.free,
+    volumes: vol.volumes,
     categories: filtered,
-    reclaimableBytes: reclaimable
+    reclaimableBytes: computeReclaimableBytes(filtered)
   }
+}
+
+/**
+ * Full disk scan. Concurrent callers share one in-flight run so the tray's
+ * background rescan cannot race a user-initiated Dashboard scan.
+ */
+export async function runFullScan(
+  onProgress?: (label: string, done: number, total: number) => void,
+  ignoredPaths: string[] = [],
+  prefs?: ScanPreferences
+): Promise<ScanSummary> {
+  if (inFlightScan) return inFlightScan
+  cancelRequested = false
+  inFlightScan = doFullScan(onProgress, ignoredPaths, prefs)
+    .catch((err) => {
+      throw err
+    })
+    .finally(() => {
+      inFlightScan = null
+      cancelRequested = false
+    })
+  return inFlightScan
 }

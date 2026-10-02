@@ -15,7 +15,7 @@ const MAX_DEPTH = 8
 async function walk(
   root: string,
   depth: number,
-  out: Array<{ path: string; size: number }>,
+  out: Array<{ path: string; size: number; mtimeMs: number }>,
   denied: { value: boolean }
 ): Promise<void> {
   if (out.length >= MAX_FILES_WALKED || depth > MAX_DEPTH) return
@@ -35,7 +35,7 @@ async function walk(
     } else if (entry.isFile()) {
       try {
         const st = await fs.stat(full)
-        if (st.size > 0) out.push({ path: full, size: st.size })
+        if (st.size > 0) out.push({ path: full, size: st.size, mtimeMs: st.mtimeMs })
       } catch {
         // unreadable file, skip
       }
@@ -53,12 +53,24 @@ function hashFile(path: string): Promise<string> {
   })
 }
 
+/** Oldest mtime first so files[0] is the keep target for "Keep oldest". */
+export function orderByOldestFirst(
+  files: string[],
+  mtimeMsByPath: Map<string, number>
+): string[] {
+  return [...files].sort(
+    (a, b) => (mtimeMsByPath.get(a) ?? Number.POSITIVE_INFINITY) - (mtimeMsByPath.get(b) ?? Number.POSITIVE_INFINITY)
+  )
+}
+
 export async function findDuplicates(): Promise<DuplicatesResult> {
-  const files: Array<{ path: string; size: number }> = []
+  const files: Array<{ path: string; size: number; mtimeMs: number }> = []
   const denied = { value: false }
   for (const root of SEARCH_ROOTS) {
     await walk(root, 0, files, denied)
   }
+
+  const mtimeMsByPath = new Map(files.map((f) => [f.path, f.mtimeMs]))
 
   const bySize = new Map<number, string[]>()
   for (const f of files) {
@@ -84,7 +96,11 @@ export async function findDuplicates(): Promise<DuplicatesResult> {
     }
     for (const [hash, matched] of byHash) {
       if (matched.length > 1) {
-        groups.push({ sizeBytes: size, hash, files: matched })
+        groups.push({
+          sizeBytes: size,
+          hash,
+          files: orderByOldestFirst(matched, mtimeMsByPath)
+        })
       }
     }
   }

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
+import type { ScanPreferences } from '@shared/types'
+import { DEFAULT_SCAN_PREFERENCES } from '@shared/preferences'
 import { useSiftStore } from '../store'
 import { formatBytes, formatRelativeDate } from '../lib/format'
 
-type SettingsTab = 'access' | 'ai' | 'activity'
+type SettingsTab = 'access' | 'scan' | 'ai' | 'activity'
 
 export default function SettingsModal(): React.JSX.Element | null {
   const open = useSiftStore((s) => s.settingsOpen)
@@ -21,23 +23,38 @@ export default function SettingsModal(): React.JSX.Element | null {
   const unignorePath = useSiftStore((s) => s.unignorePath)
   const clearHistory = useSiftStore((s) => s.clearHistory)
   const refreshClearHistory = useSiftStore((s) => s.refreshClearHistory)
+  const scanPreferences = useSiftStore((s) => s.scanPreferences)
+  const loadScanPreferences = useSiftStore((s) => s.loadScanPreferences)
+  const saveScanPreferences = useSiftStore((s) => s.saveScanPreferences)
+  const categoryDefs = useSiftStore((s) => s.categoryDefs)
+  const loadCategoryDefs = useSiftStore((s) => s.loadCategoryDefs)
   const [tab, setTab] = useState<SettingsTab>('access')
   const [key, setKey] = useState('')
   const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState<ScanPreferences>(DEFAULT_SCAN_PREFERENCES)
+  const [savingPrefs, setSavingPrefs] = useState(false)
 
   useEffect(() => {
     if (!open) return
     if (!permissions) refreshPermissions()
     if (!ignoredPaths) refreshIgnoredPaths()
     refreshClearHistory()
+    loadScanPreferences()
+    loadCategoryDefs()
   }, [
     open,
     permissions,
     ignoredPaths,
     refreshPermissions,
     refreshIgnoredPaths,
-    refreshClearHistory
+    refreshClearHistory,
+    loadScanPreferences,
+    loadCategoryDefs
   ])
+
+  useEffect(() => {
+    if (scanPreferences) setDraft(scanPreferences)
+  }, [scanPreferences])
 
   if (!open) return null
 
@@ -62,6 +79,24 @@ export default function SettingsModal(): React.JSX.Element | null {
     showToast('API key removed')
   }
 
+  const savePrefs = async (): Promise<void> => {
+    setSavingPrefs(true)
+    try {
+      await saveScanPreferences(draft)
+    } finally {
+      setSavingPrefs(false)
+    }
+  }
+
+  const toggleCategory = (id: string): void => {
+    setDraft((prev) => {
+      const disabled = new Set(prev.disabledCategoryIds)
+      if (disabled.has(id)) disabled.delete(id)
+      else disabled.add(id)
+      return { ...prev, disabledCategoryIds: Array.from(disabled) }
+    })
+  }
+
   const tabButtonClass = (id: SettingsTab): string =>
     clsx(
       'flex-1 py-1.5 rounded-md text-[12.5px] font-medium transition-colors',
@@ -70,13 +105,32 @@ export default function SettingsModal(): React.JSX.Element | null {
         : 'text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]'
     )
 
+  const numberField = (
+    label: string,
+    keyName: keyof ScanPreferences,
+    hint: string
+  ): React.JSX.Element => (
+    <label className="block">
+      <span className="text-[12px] font-medium text-[var(--sift-text-muted)]">{label}</span>
+      <input
+        type="number"
+        value={draft[keyName] as number}
+        onChange={(e) =>
+          setDraft((prev) => ({ ...prev, [keyName]: Number(e.target.value) }))
+        }
+        className="mt-1 w-full rounded-lg border border-[var(--sift-border)] bg-[var(--sift-bg)] px-3 py-1.5 text-[13px] outline-none focus:border-[var(--sift-accent)]"
+      />
+      <span className="text-[11px] text-[var(--sift-text-muted)] mt-1 block">{hint}</span>
+    </label>
+  )
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-[460px] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface-raised)] p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
+        className="w-[500px] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface-raised)] p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="font-semibold text-[15px] mb-3.5">Settings</h2>
@@ -84,6 +138,9 @@ export default function SettingsModal(): React.JSX.Element | null {
         <div className="flex gap-1 p-[3px] rounded-[10px] bg-[var(--sift-bg)] mb-4">
           <button onClick={() => setTab('access')} className={tabButtonClass('access')}>
             Access
+          </button>
+          <button onClick={() => setTab('scan')} className={tabButtonClass('scan')}>
+            Scan
           </button>
           <button onClick={() => setTab('ai')} className={tabButtonClass('ai')}>
             AI
@@ -147,6 +204,66 @@ export default function SettingsModal(): React.JSX.Element | null {
                 Fix denied folders in System Settings →
               </button>
             )}
+          </div>
+        )}
+
+        {tab === 'scan' && (
+          <div className="space-y-4">
+            <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+              Tune what Sift looks for. Changes apply on the next scan.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {numberField('Large file size (MB)', 'largeFileMinMb', 'Minimum file size')}
+              {numberField('Large file age (days)', 'largeFileMinAgeDays', 'Untouched for…')}
+              {numberField('Old Downloads (days)', 'downloadsMinAgeDays', 'Downloads age filter')}
+              {numberField('Logs age (days)', 'logsMinAgeDays', 'Log / crash age filter')}
+              {numberField('Mail downloads (days)', 'mailMinAgeDays', 'Mail attachment age')}
+              {numberField('Messages (days)', 'messagesMinAgeDays', 'Attachment age')}
+              {numberField('Xcode archives (days)', 'archivesMinAgeDays', 'Archive age')}
+              {numberField('Background scan (hours)', 'backgroundScanHours', 'Menu bar rescan')}
+            </div>
+
+            <div>
+              <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
+                Categories
+              </h3>
+              <div className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] max-h-[180px] overflow-y-auto">
+                {(categoryDefs ?? []).map((c) => {
+                  const enabled = !draft.disabledCategoryIds.includes(c.id)
+                  return (
+                    <label
+                      key={c.id}
+                      className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={() => toggleCategory(c.id)}
+                        className="accent-[var(--sift-accent)]"
+                      />
+                      <span className="flex-1">{c.label}</span>
+                      <span className="text-[11px] text-[var(--sift-text-muted)]">{c.risk}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDraft(DEFAULT_SCAN_PREFERENCES)}
+                className="text-[12.5px] text-[var(--sift-text-muted)] hover:underline"
+              >
+                Reset defaults
+              </button>
+              <button
+                onClick={savePrefs}
+                disabled={savingPrefs}
+                className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-1.5 text-[13px] font-medium text-black disabled:opacity-40"
+              >
+                {savingPrefs ? 'Saving…' : 'Save scan settings'}
+              </button>
+            </div>
           </div>
         )}
 

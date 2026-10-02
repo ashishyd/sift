@@ -18,6 +18,7 @@ mac:
     - NSDocumentsFolderUsageDescription: Sift scans your Documents folder to find large or old files you may want to clear.
     - NSDownloadsFolderUsageDescription: Sift scans your Downloads folder to find large or old files you may want to clear.
     - NSDesktopFolderUsageDescription: Sift scans your Desktop to find large or old files you may want to clear.
+    - NSPicturesFolderUsageDescription: Sift scans your Pictures folder to find large media and Photos libraries you may want to review.
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}

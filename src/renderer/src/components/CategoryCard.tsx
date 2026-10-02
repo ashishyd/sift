@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import clsx from 'clsx'
 import type { CategoryResult } from '@shared/types'
+import { categoryHiddenStats } from '@shared/preferences'
 import { formatBytes, formatRelativeDate } from '../lib/format'
 import { useSiftStore } from '../store'
 import RiskBadge from './RiskBadge'
@@ -12,12 +13,18 @@ export default function CategoryCard({ category }: { category: CategoryResult })
   const selectAllInCategory = useSiftStore((s) => s.selectAllInCategory)
   const trashPaths = useSiftStore((s) => s.trashPaths)
   const ignoreItems = useSiftStore((s) => s.ignoreItems)
+  const emptyTrash = useSiftStore((s) => s.emptyTrash)
 
-  if (category.missing || category.items.length === 0) return null
+  if (category.missing || (category.items.length === 0 && category.totalSizeBytes === 0)) return null
+
+  // Trash can report size with an empty capped list after partial clears — still show Empty Trash.
+  if (category.id !== 'trash' && category.items.length === 0) return null
 
   const paths = category.items.map((i) => i.path)
   const selectedCount = paths.filter((p) => selected.has(p)).length
   const allSelected = selectedCount === paths.length && paths.length > 0
+  const hidden = categoryHiddenStats(category)
+  const isTrash = category.id === 'trash'
 
   return (
     <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] overflow-hidden">
@@ -42,7 +49,9 @@ export default function CategoryCard({ category }: { category: CategoryResult })
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <span className="text-[13px] text-[var(--sift-text-muted)]">{category.items.length} item(s)</span>
+          <span className="text-[13px] text-[var(--sift-text-muted)]">
+            {category.matchedItemCount ?? category.items.length} item(s)
+          </span>
           <span className="font-semibold tabular-nums">{formatBytes(category.totalSizeBytes)}</span>
         </div>
       </button>
@@ -50,16 +59,25 @@ export default function CategoryCard({ category }: { category: CategoryResult })
       {expanded && (
         <div className="border-t border-[var(--sift-border)]">
           <div className="flex items-center justify-between px-4 py-2 bg-black/20">
-            <label className="flex items-center gap-2 text-[12.5px] text-[var(--sift-text-muted)] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={() => selectAllInCategory(paths)}
-                className="accent-[var(--sift-accent)]"
-              />
-              Select all
-            </label>
-            {selectedCount > 0 && (
+            {isTrash ? (
+              <button
+                onClick={emptyTrash}
+                className="text-[12.5px] font-medium text-[var(--sift-review)] hover:underline"
+              >
+                Empty Trash permanently
+              </button>
+            ) : (
+              <label className="flex items-center gap-2 text-[12.5px] text-[var(--sift-text-muted)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() => selectAllInCategory(paths)}
+                  className="accent-[var(--sift-accent)]"
+                />
+                Select all
+              </label>
+            )}
+            {!isTrash && selectedCount > 0 && (
               <button
                 onClick={() => trashPaths(paths.filter((p) => selected.has(p)))}
                 className="text-[12.5px] font-medium text-[var(--sift-review)] hover:underline"
@@ -71,12 +89,14 @@ export default function CategoryCard({ category }: { category: CategoryResult })
           <ul className="max-h-72 overflow-y-auto divide-y divide-[var(--sift-border)]">
             {category.items.map((item) => (
               <li key={item.path} className="flex items-center gap-3 px-4 py-2 hover:bg-white/[0.02]">
-                <input
-                  type="checkbox"
-                  checked={selected.has(item.path)}
-                  onChange={() => toggleSelected(item.path)}
-                  className="accent-[var(--sift-accent)] shrink-0"
-                />
+                {!isTrash && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(item.path)}
+                    onChange={() => toggleSelected(item.path)}
+                    className="accent-[var(--sift-accent)] shrink-0"
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] truncate" title={item.path}>
                     {item.name}
@@ -95,15 +115,22 @@ export default function CategoryCard({ category }: { category: CategoryResult })
                 >
                   Reveal
                 </button>
-                <button
-                  onClick={() => ignoreItems([item.path])}
-                  className="text-[11.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)] shrink-0"
-                  title="Never suggest this item again"
-                >
-                  Ignore
-                </button>
+                {!isTrash && (
+                  <button
+                    onClick={() => ignoreItems([item.path])}
+                    className="text-[11.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)] shrink-0"
+                    title="Never suggest this item again"
+                  >
+                    Ignore
+                  </button>
+                )}
               </li>
             ))}
+            {hidden.count > 0 && (
+              <li className="px-4 py-2 text-[12px] text-[var(--sift-text-muted)]">
+                +{hidden.count} more ({formatBytes(hidden.bytes)}) not listed — included in the total
+              </li>
+            )}
           </ul>
         </div>
       )}

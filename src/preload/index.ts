@@ -5,6 +5,9 @@ import type {
   AiSuggestion,
   ClearHistoryEntry,
   DuplicatesResult,
+  FolderListing,
+  RiskLevel,
+  ScanPreferences,
   ScanSummary,
   TrashResult
 } from '../shared/types'
@@ -20,8 +23,11 @@ const api = {
       ipcRenderer.removeListener('sift:scan-progress', listener)
     })
   },
+  cancelScan: (): Promise<void> => ipcRenderer.invoke('sift:cancelScan'),
+  listFolder: (path: string): Promise<FolderListing> => ipcRenderer.invoke('sift:listFolder', path),
   findDuplicates: (): Promise<DuplicatesResult> => ipcRenderer.invoke('sift:findDuplicates'),
   trash: (paths: string[]): Promise<TrashResult> => ipcRenderer.invoke('sift:trash', paths),
+  emptyTrash: (): Promise<{ freedBytes: number }> => ipcRenderer.invoke('sift:emptyTrash'),
   revealInFinder: (path: string): Promise<void> => ipcRenderer.invoke('sift:revealInFinder', path),
   getAiSuggestion: (summary: ScanSummary): Promise<AiSuggestion> =>
     ipcRenderer.invoke('sift:getAiSuggestion', summary),
@@ -33,6 +39,8 @@ const api = {
   clearApiKey: (): Promise<void> => ipcRenderer.invoke('sift:clearApiKey'),
   confirmTrash: (count: number, sizeLabel: string): Promise<boolean> =>
     ipcRenderer.invoke('sift:confirmTrash', count, sizeLabel),
+  confirmEmptyTrash: (sizeLabel: string): Promise<boolean> =>
+    ipcRenderer.invoke('sift:confirmEmptyTrash', sizeLabel),
   checkPermissions: (): Promise<AccessCheck[]> => ipcRenderer.invoke('sift:checkPermissions'),
   openPrivacySettings: (pane: PrivacyPane): Promise<void> =>
     ipcRenderer.invoke('sift:openPrivacySettings', pane),
@@ -40,7 +48,12 @@ const api = {
   getIgnoredPaths: (): Promise<string[]> => ipcRenderer.invoke('sift:getIgnoredPaths'),
   ignorePaths: (paths: string[]): Promise<string[]> => ipcRenderer.invoke('sift:ignorePaths', paths),
   unignorePath: (path: string): Promise<string[]> => ipcRenderer.invoke('sift:unignorePath', path),
-  getClearHistory: (): Promise<ClearHistoryEntry[]> => ipcRenderer.invoke('sift:getClearHistory')
+  getClearHistory: (): Promise<ClearHistoryEntry[]> => ipcRenderer.invoke('sift:getClearHistory'),
+  getScanPreferences: (): Promise<ScanPreferences> => ipcRenderer.invoke('sift:getScanPreferences'),
+  setScanPreferences: (prefs: Partial<ScanPreferences>): Promise<ScanPreferences> =>
+    ipcRenderer.invoke('sift:setScanPreferences', prefs),
+  getCategoryDefs: (): Promise<Array<{ id: string; label: string; risk: RiskLevel }>> =>
+    ipcRenderer.invoke('sift:getCategoryDefs')
 }
 
 if (process.contextIsolated) {

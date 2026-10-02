@@ -1,5 +1,8 @@
 import { shell } from 'electron'
 import { promises as fs } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
+import { run } from './exec'
 import type { TrashResult } from '../shared/types'
 
 /** Moves paths to the macOS Trash (Finder-recoverable) — never a permanent delete. */
@@ -20,6 +23,24 @@ export async function moveToTrash(paths: string[]): Promise<TrashResult> {
   }
 
   return { succeeded, failed, freedBytes }
+}
+
+/** Permanently empties the Finder Trash via AppleScript. */
+export async function emptyTrash(): Promise<{ freedBytes: number }> {
+  const trashPath = join(homedir(), '.Trash')
+  let freedBytes = 0
+  try {
+    freedBytes = await sizeOf(trashPath)
+  } catch {
+    freedBytes = 0
+  }
+
+  const { stderr } = await run('osascript', ['-e', 'tell application "Finder" to empty trash'])
+  if (stderr && /error/i.test(stderr)) {
+    throw new Error(stderr.trim() || 'Could not empty Trash')
+  }
+
+  return { freedBytes }
 }
 
 async function sizeOf(p: string): Promise<number> {

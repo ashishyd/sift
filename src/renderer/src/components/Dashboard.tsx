@@ -2,6 +2,8 @@ import { useSiftStore } from '../store'
 import { formatBytes } from '../lib/format'
 import StorageGauge from './StorageGauge'
 import CategoryCard from './CategoryCard'
+import CategoryMap from './CategoryMap'
+import VolumesList from './VolumesList'
 import AiPanel from './AiPanel'
 import TopActions from './TopActions'
 import PermissionsBanner from './PermissionsBanner'
@@ -13,6 +15,7 @@ export default function Dashboard(): React.JSX.Element {
   const progress = useSiftStore((s) => s.progress)
   const scanLog = useSiftStore((s) => s.scanLog)
   const runScan = useSiftStore((s) => s.runScan)
+  const cancelScan = useSiftStore((s) => s.cancelScan)
   const selected = useSiftStore((s) => s.selected)
   const trashSelected = useSiftStore((s) => s.trashSelected)
   const clearSelected = useSiftStore((s) => s.clearSelected)
@@ -67,6 +70,12 @@ export default function Dashboard(): React.JSX.Element {
             })}
           </ul>
         )}
+        <button
+          onClick={cancelScan}
+          className="mt-2 rounded-lg border border-[var(--sift-border)] px-3.5 py-1.5 text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+        >
+          Cancel scan
+        </button>
       </div>
     )
   }
@@ -87,6 +96,7 @@ export default function Dashboard(): React.JSX.Element {
 
       <PermissionsBanner />
       <TopActions />
+      <CategoryMap categories={summary.categories} />
 
       <div className="grid grid-cols-[1fr_300px] gap-6">
         <div className="space-y-3">
@@ -119,7 +129,7 @@ export default function Dashboard(): React.JSX.Element {
             />
             <div className="w-full mt-3 space-y-1 text-[12px] text-[var(--sift-text-muted)]">
               <div className="flex justify-between">
-                <span>Disk total</span>
+                <span>Startup disk</span>
                 <span>{formatBytes(summary.volumeTotalBytes)}</span>
               </div>
               <div className="flex justify-between">
@@ -127,6 +137,7 @@ export default function Dashboard(): React.JSX.Element {
                 <span>{formatBytes(summary.volumeFreeBytes)}</span>
               </div>
             </div>
+            <VolumesList volumes={summary.volumes ?? []} />
           </div>
 
           <AiPanel />

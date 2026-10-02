@@ -2,15 +2,16 @@ import { Tray, Menu, nativeImage, app, type BrowserWindow } from 'electron'
 import { readFileSync } from 'fs'
 import trayIconAsset from '../../resources/trayTemplate.png?asset'
 import trayIconAsset2x from '../../resources/trayTemplate@2x.png?asset'
-import { runFullScan } from './scanner'
-import { getIgnoredPaths, loadLastScan, saveLastScan } from './config'
+import { runFullScan, ScanCancelledError } from './scanner'
+import { getIgnoredPaths, getScanPreferences, loadLastScan, saveLastScan } from './config'
 import type { ScanSummary } from '../shared/types'
 
-const BACKGROUND_SCAN_INTERVAL_MS = 4 * 60 * 60 * 1000 // 4 hours
 const FIRST_SCAN_DELAY_MS = 30 * 1000 // let the app settle before any TCC prompts can fire
 
 let tray: Tray | null = null
 let lastSummary: ScanSummary | null = null
+let backgroundTimer: ReturnType<typeof setTimeout> | null = null
+let rebuildMenuRef: (() => void) | null = null
 
 function formatBytesShort(n: number): string {
   if (n <= 0) return '0 MB'
@@ -36,12 +37,31 @@ export function setLastScanSummary(summary: ScanSummary): void {
 async function runBackgroundScan(): Promise<void> {
   try {
     const ignored = await getIgnoredPaths()
-    lastSummary = await runFullScan(undefined, ignored)
+    const prefs = await getScanPreferences()
+    lastSummary = await runFullScan(undefined, ignored, prefs)
     await saveLastScan(lastSummary)
     tray?.setTitle(` ${formatBytesShort(lastSummary.reclaimableBytes)}`)
-  } catch {
+  } catch (err) {
+    if (err instanceof ScanCancelledError) return
     // background scan is best-effort — a failure here shouldn't surface anywhere disruptive
   }
+}
+
+function scheduleBackgroundScan(delayMs: number): void {
+  if (backgroundTimer) clearTimeout(backgroundTimer)
+  backgroundTimer = setTimeout(async () => {
+    await runBackgroundScan()
+    rebuildMenuRef?.()
+    const prefs = await getScanPreferences()
+    scheduleBackgroundScan(prefs.backgroundScanHours * 60 * 60 * 1000)
+  }, delayMs)
+}
+
+/** After Settings change the background interval, restart the timer from now. */
+export async function rescheduleBackgroundScan(): Promise<void> {
+  if (!tray) return
+  const prefs = await getScanPreferences()
+  scheduleBackgroundScan(prefs.backgroundScanHours * 60 * 60 * 1000)
 }
 
 export function createTray(getMainWindow: () => BrowserWindow | null): Tray {
@@ -83,6 +103,7 @@ export function createTray(getMainWindow: () => BrowserWindow | null): Tray {
     tray?.setContextMenu(menu)
   }
 
+  rebuildMenuRef = rebuildMenu
   rebuildMenu()
   loadLastScan().then((cached) => {
     if (cached && !lastSummary) {
@@ -93,12 +114,7 @@ export function createTray(getMainWindow: () => BrowserWindow | null): Tray {
   })
   tray.on('click', showWindow)
 
-  setTimeout(() => {
-    runBackgroundScan().then(rebuildMenu)
-  }, FIRST_SCAN_DELAY_MS)
-  setInterval(() => {
-    runBackgroundScan().then(rebuildMenu)
-  }, BACKGROUND_SCAN_INTERVAL_MS)
+  scheduleBackgroundScan(FIRST_SCAN_DELAY_MS)
 
   return tray
 }

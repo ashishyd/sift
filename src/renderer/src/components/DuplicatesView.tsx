@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { formatBytes } from '../lib/format'
 import { useSiftStore } from '../store'
 
@@ -7,6 +8,8 @@ export default function DuplicatesView(): React.JSX.Element {
   const runDuplicateScan = useSiftStore((s) => s.runDuplicateScan)
   const trashPaths = useSiftStore((s) => s.trashPaths)
   const openPrivacySettings = useSiftStore((s) => s.openPrivacySettings)
+  /** hash → path to keep (defaults to oldest / files[0]) */
+  const [keepers, setKeepers] = useState<Record<string, string>>({})
 
   return (
     <div className="space-y-4">
@@ -36,8 +39,7 @@ export default function DuplicatesView(): React.JSX.Element {
             reclaimable by keeping one copy of each.
           </p>
           <p className="text-[12px] text-[var(--sift-text-muted)]/80 mt-0.5">
-            Sift keeps the oldest copy of each and moves the rest to Trash — check the list if
-            you&apos;d rather keep a different one.
+            Oldest copy is kept by default — choose &quot;Keep this&quot; on another path if you prefer.
           </p>
         </div>
       )}
@@ -60,45 +62,61 @@ export default function DuplicatesView(): React.JSX.Element {
       )}
 
       <div className="space-y-3">
-        {duplicates?.groups.map((group) => (
-          <div
-            key={group.hash}
-            className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[12.5px] text-[var(--sift-text-muted)]">
-                {group.files.length} copies · {formatBytes(group.sizeBytes)} each
-              </span>
-              <button
-                onClick={() => trashPaths(group.files.slice(1))}
-                className="text-[12px] font-medium text-[var(--sift-review)] hover:underline"
-              >
-                Keep oldest, trash the rest
-              </button>
+        {duplicates?.groups.map((group) => {
+          const keeper = keepers[group.hash] ?? group.files[0]
+          const toTrash = group.files.filter((f) => f !== keeper)
+          return (
+            <div
+              key={group.hash}
+              className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[12.5px] text-[var(--sift-text-muted)]">
+                  {group.files.length} copies · {formatBytes(group.sizeBytes)} each
+                </span>
+                <button
+                  onClick={() => trashPaths(toTrash)}
+                  disabled={toTrash.length === 0}
+                  className="text-[12px] font-medium text-[var(--sift-review)] hover:underline disabled:opacity-40"
+                >
+                  Keep selected, trash the rest
+                </button>
+              </div>
+              <ul className="space-y-1">
+                {group.files.map((f) => {
+                  const isKeeper = f === keeper
+                  return (
+                    <li key={f} className="flex items-center justify-between text-[12.5px] gap-3">
+                      <span
+                        className={isKeeper ? 'text-[var(--sift-text)]' : 'text-[var(--sift-text-muted)]'}
+                        title={f}
+                      >
+                        {isKeeper && <span className="text-[var(--sift-accent)] mr-1">Keep ·</span>}
+                        {f}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!isKeeper && (
+                          <button
+                            onClick={() => setKeepers((prev) => ({ ...prev, [group.hash]: f }))}
+                            className="text-[11px] font-medium text-[var(--sift-accent)] hover:underline"
+                          >
+                            Keep this
+                          </button>
+                        )}
+                        <button
+                          onClick={() => window.api.revealInFinder(f)}
+                          className="text-[11px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+                        >
+                          Reveal
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
-            <ul className="space-y-1">
-              {group.files.map((f, idx) => (
-                <li key={f} className="flex items-center justify-between text-[12.5px] gap-3">
-                  <span
-                    className={
-                      idx === 0 ? 'text-[var(--sift-text)]' : 'text-[var(--sift-text-muted)]'
-                    }
-                    title={f}
-                  >
-                    {idx === 0 && <span className="text-[var(--sift-accent)] mr-1">Keep ·</span>}
-                    {f}
-                  </span>
-                  <button
-                    onClick={() => window.api.revealInFinder(f)}
-                    className="text-[11px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)] shrink-0"
-                  >
-                    Reveal
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {duplicates && duplicates.groups.length === 0 && (

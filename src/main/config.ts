@@ -1,7 +1,9 @@
 import { app, safeStorage } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import type { ClearHistoryEntry, ScanSummary } from '../shared/types'
+import { computeReclaimableBytes } from '../shared/reclaimable'
+import { normalizeScanPreferences } from '../shared/preferences'
+import type { ClearHistoryEntry, ScanPreferences, ScanSummary } from '../shared/types'
 
 const MAX_HISTORY_ENTRIES = 100
 
@@ -13,6 +15,7 @@ interface StoredConfig {
   encryptedApiKey?: string // base64
   ignoredPaths?: string[]
   clearHistory?: ClearHistoryEntry[]
+  scanPreferences?: Partial<ScanPreferences>
 }
 
 async function readConfig(): Promise<StoredConfig> {
@@ -94,6 +97,20 @@ export async function appendClearHistory(entry: ClearHistoryEntry): Promise<void
   await patchConfig({ clearHistory: next })
 }
 
+export async function getScanPreferences(): Promise<ScanPreferences> {
+  const cfg = await readConfig()
+  return normalizeScanPreferences(cfg.scanPreferences)
+}
+
+export async function setScanPreferences(
+  prefs: Partial<ScanPreferences>
+): Promise<ScanPreferences> {
+  const current = await getScanPreferences()
+  const next = normalizeScanPreferences({ ...current, ...prefs })
+  await patchConfig({ scanPreferences: next })
+  return next
+}
+
 function lastScanPath(): string {
   return join(app.getPath('userData'), 'last-scan.json')
 }
@@ -121,11 +138,19 @@ export async function pruneLastScan(removed: string[]): Promise<void> {
   if (!summary) return
   const gone = new Set(removed)
   const categories = summary.categories.map((c) => {
+    const before = c.items.length
     const items = c.items.filter((i) => !gone.has(i.path))
-    return { ...c, items, totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0) }
+    const removed = before - items.length
+    return {
+      ...c,
+      items,
+      totalSizeBytes: items.reduce((s, i) => s + i.sizeBytes, 0),
+      matchedItemCount: Math.max(0, (c.matchedItemCount ?? before) - removed)
+    }
   })
-  const reclaimableBytes = categories
-    .filter((c) => c.id !== 'trash')
-    .reduce((s, c) => s + c.totalSizeBytes, 0)
-  await saveLastScan({ ...summary, categories, reclaimableBytes })
+  await saveLastScan({
+    ...summary,
+    categories,
+    reclaimableBytes: computeReclaimableBytes(categories)
+  })
 }

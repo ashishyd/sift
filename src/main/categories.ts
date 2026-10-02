@@ -62,6 +62,35 @@ export const CATEGORY_DEFS: CategoryDef[] = [
     ]
   },
   {
+    id: 'browser-caches',
+    label: 'Browser Caches',
+    description: 'Chrome, Firefox, Safari, Edge and Arc download caches. Safe to clear — pages re-cache on visit.',
+    risk: 'safe',
+    paths: [
+      h('Library', 'Caches', 'Google', 'Chrome'),
+      h('Library', 'Caches', 'Firefox'),
+      h('Library', 'Caches', 'com.apple.Safari'),
+      h('Library', 'Caches', 'CloudKit', 'com.apple.Safari'),
+      h('Library', 'Caches', 'com.microsoft.edgemac'),
+      h('Library', 'Caches', 'company.thebrowser.Browser'),
+      h('Library', 'Caches', 'BraveSoftware')
+    ]
+  },
+  {
+    id: 'dev-tool-caches',
+    label: 'Gradle / Cargo / pip / CocoaPods',
+    description: 'Language and mobile package caches. Regenerated on the next build or install.',
+    risk: 'safe',
+    paths: [
+      h('.gradle', 'caches'),
+      h('.cargo', 'registry'),
+      h('.cargo', 'git'),
+      h('.cache', 'pip'),
+      h('Library', 'Caches', 'pip'),
+      h('Library', 'Caches', 'CocoaPods')
+    ]
+  },
+  {
     id: 'homebrew-cache',
     label: 'Homebrew Cache',
     description: 'Downloaded bottles/formula archives Homebrew keeps after install.',
@@ -78,7 +107,7 @@ export const CATEGORY_DEFS: CategoryDef[] = [
   {
     id: 'trash',
     label: 'Trash',
-    description: "Files already in Trash, waiting to be emptied. Sift won't empty this for you.",
+    description: 'Files already in Trash. Empty Trash from Sift when you are ready — permanent.',
     risk: 'caution',
     paths: [h('.Trash')]
   },
@@ -97,6 +126,14 @@ export const CATEGORY_DEFS: CategoryDef[] = [
     risk: 'review',
     paths: [h('Downloads')],
     minAgeDays: 90
+  },
+  {
+    id: 'orphaned-dmgs',
+    label: 'Old Disk Images',
+    description: 'DMG/ISO installers on Desktop and Downloads older than 30 days — usually safe after the app is installed.',
+    risk: 'review',
+    paths: [h('Desktop'), h('Downloads')],
+    minAgeDays: 30
   },
   {
     id: 'ios-backups',

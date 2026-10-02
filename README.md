@@ -16,10 +16,10 @@ so it's recoverable until you empty it yourself.
 - **Top actions** — a single ranked list on the Dashboard, sorted by space
   freed × how confident Sift is it's safe, so you're not hunting through
   category cards to find the biggest win.
-- **Explore** — a real folder-tree view (expand/collapse, folder/file icons,
-  checkboxes, indent guides) of everything Sift found, not just a flat list.
+- **Explore** — expand categories and folders with size-sorted children (lazy
+  load), checkboxes, and indent guides — not just a flat list.
 - **Duplicate finder** — hashes files in Desktop/Documents/Downloads/Pictures
-  to find exact-content duplicates, with a "keep first, trash the rest" action.
+  to find exact-content duplicates; pick which copy to keep, trash the rest.
 - **AI recommendations + chat** — Claude turns a scan into plain-English
   verdicts per category, and you can ask follow-up questions about a specific
   file or category. Works with an Anthropic API key *or* your local, already
@@ -65,10 +65,12 @@ so it's recoverable until you empty it yourself.
 
 ## Categories Sift checks
 
-App Caches, Xcode DerivedData/Archives/iOS DeviceSupport, Simulator caches,
-npm/pnpm/yarn caches, Homebrew cache, Docker Desktop data, Trash, log files,
-old Downloads, iOS device backups, Mail downloads, Messages attachments,
-Pictures/Photos Library, stray `node_modules`, and large & unused files.
+App Caches, browser caches (Chrome/Firefox/Safari/Edge/Arc), Xcode
+DerivedData/Archives/iOS DeviceSupport, Simulator caches, npm/pnpm/yarn,
+Gradle/Cargo/pip/CocoaPods, Homebrew cache, Docker Desktop data, Trash, log
+files, old Downloads, old disk images (DMG/ISO/PKG), iOS device backups, Mail
+downloads, Messages attachments, Pictures/Photos Library, stray `node_modules`,
+and large & unused files.
 
 ## Permissions
 
@@ -101,8 +103,8 @@ push/PR to `main`.
 
 ## Privacy & safety
 
-- Deletion always goes through the macOS Trash (`trash` npm package) — never
-  a permanent delete.
+- Deletion always goes through the macOS Trash (`shell.trashItem`) — never
+  a permanent delete. Empty Trash is a separate, confirmed action.
 - Every clear action is confirmed with a native dialog showing item count and
   reclaimable size before anything moves.
 - The optional Claude integration (API key or local CLI) sends category-level

@@ -2,9 +2,9 @@ import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { runFullScan } from './scanner'
+import { listFolder, requestScanCancel, runFullScan, ScanCancelledError } from './scanner'
 import { findDuplicates } from './duplicates'
-import { moveToTrash } from './trashOps'
+import { emptyTrash, moveToTrash } from './trashOps'
 import { getSuggestion, askAboutScan, hasClaudeCli } from './ai'
 import {
   setApiKey,
@@ -17,11 +17,14 @@ import {
   appendClearHistory,
   saveLastScan,
   loadLastScan,
-  pruneLastScan
+  pruneLastScan,
+  getScanPreferences,
+  setScanPreferences
 } from './config'
 import { checkAllPermissions, openPrivacySettings, type PrivacyPane } from './permissions'
-import { createTray, getLastScanSummary, setLastScanSummary } from './tray'
-import type { ScanSummary } from '../shared/types'
+import { createTray, getLastScanSummary, setLastScanSummary, rescheduleBackgroundScan } from './tray'
+import { CATEGORY_DEFS } from './categories'
+import type { ScanPreferences, ScanSummary } from '../shared/types'
 import type { Tray } from 'electron'
 
 let isQuitting = false
@@ -90,13 +93,31 @@ app.whenReady().then(() => {
 
   ipcMain.handle('sift:scan', async (event) => {
     const ignored = await getIgnoredPaths()
-    const summary = await runFullScan((label, done, total) => {
-      event.sender.send('sift:scan-progress', { label, done, total })
-    }, ignored)
-    setLastScanSummary(summary)
-    await saveLastScan(summary)
-    return summary
+    const prefs = await getScanPreferences()
+    try {
+      const summary = await runFullScan(
+        (label, done, total) => {
+          event.sender.send('sift:scan-progress', { label, done, total })
+        },
+        ignored,
+        prefs
+      )
+      setLastScanSummary(summary)
+      await saveLastScan(summary)
+      return summary
+    } catch (err) {
+      if (err instanceof ScanCancelledError) {
+        throw err
+      }
+      throw err
+    }
   })
+
+  ipcMain.handle('sift:cancelScan', async () => {
+    requestScanCancel()
+  })
+
+  ipcMain.handle('sift:listFolder', async (_event, path: string) => listFolder(path))
 
   ipcMain.handle('sift:findDuplicates', async () => {
     return findDuplicates()
@@ -117,10 +138,43 @@ app.whenReady().then(() => {
     return result
   })
 
+  ipcMain.handle('sift:emptyTrash', async () => {
+    const result = await emptyTrash()
+    const summary = await loadLastScan()
+    if (summary) {
+      const categories = summary.categories.map((c) =>
+        c.id === 'trash'
+          ? { ...c, items: [], totalSizeBytes: 0, matchedItemCount: 0, missing: false }
+          : c
+      )
+      const next = { ...summary, categories, reclaimableBytes: summary.reclaimableBytes }
+      await saveLastScan(next)
+      setLastScanSummary(next)
+    }
+    if (result.freedBytes > 0) {
+      await appendClearHistory({
+        date: new Date().toISOString(),
+        count: 1,
+        freedBytes: result.freedBytes
+      })
+    }
+    return result
+  })
+
   ipcMain.handle('sift:getIgnoredPaths', async () => getIgnoredPaths())
   ipcMain.handle('sift:ignorePaths', async (_event, paths: string[]) => ignorePaths(paths))
   ipcMain.handle('sift:unignorePath', async (_event, path: string) => unignorePath(path))
   ipcMain.handle('sift:getClearHistory', async () => getClearHistory())
+
+  ipcMain.handle('sift:getScanPreferences', async () => getScanPreferences())
+  ipcMain.handle('sift:setScanPreferences', async (_event, prefs: Partial<ScanPreferences>) => {
+    const next = await setScanPreferences(prefs)
+    await rescheduleBackgroundScan()
+    return next
+  })
+  ipcMain.handle('sift:getCategoryDefs', async () =>
+    CATEGORY_DEFS.map(({ id, label, risk }) => ({ id, label, risk }))
+  )
 
   ipcMain.handle('sift:revealInFinder', async (_event, path: string) => {
     shell.showItemInFolder(path)
@@ -148,6 +202,19 @@ app.whenReady().then(() => {
       title: 'Move to Trash?',
       message: `Move ${count} item(s) to Trash?`,
       detail: `This will free up roughly ${sizeLabel}. Items go to Trash and can be restored until you empty it.`
+    })
+    return result.response === 0
+  })
+
+  ipcMain.handle('sift:confirmEmptyTrash', async (_event, sizeLabel: string) => {
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: ['Empty Trash', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Empty Trash?',
+      message: 'Permanently delete everything in Trash?',
+      detail: `This frees about ${sizeLabel} and cannot be undone. Items currently in Trash will be permanently deleted.`
     })
     return result.response === 0
   })
