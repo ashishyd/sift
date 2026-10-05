@@ -41,3 +41,7 @@ if (existsSync(dest)) {
 
 execFileSync('ditto', [appPath, dest], { stdio: 'inherit' })
 console.log(`Installed ${appName} to ${DEST_DIR}`)
+
+// Drop the build copy so Spotlight/Launchpad don't list a second "Sift".
+rmSync(appPath, { recursive: true, force: true })
+console.log(`Removed build copy at ${appPath}`)
