@@ -48,3 +48,12 @@ describe('categoryHiddenStats', () => {
     expect(categoryHiddenStats(category)).toEqual({ count: 3, bytes: 250 })
   })
 })
+
+describe('low-space prefs', () => {
+  it('defaults on at 20 GB and clamps', () => {
+    const d = normalizeScanPreferences(null)
+    expect(d.lowSpaceAlertsEnabled).toBe(true)
+    expect(d.lowSpaceThresholdGb).toBe(20)
+    expect(normalizeScanPreferences({ lowSpaceThresholdGb: 0 }).lowSpaceThresholdGb).toBe(1)
+  })
+})

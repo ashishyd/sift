@@ -2,15 +2,19 @@ import { create } from 'zustand'
 import { computeReclaimableBytes } from '@shared/reclaimable'
 import type {
   AccessCheck,
+  AiAppsReport,
   AiSuggestion,
   ClearHistoryEntry,
   DuplicatesResult,
   FolderListing,
+  HiddenSpaceReport,
   RiskLevel,
   ScanPreferences,
   ScanSummary
 } from '@shared/types'
 import { formatBytes } from './lib/format'
+
+export type View = 'dashboard' | 'duplicates' | 'explore' | 'ai-apps' | 'hidden'
 
 interface ScanProgress {
   label: string
@@ -31,7 +35,7 @@ interface SiftState {
   hasApiKey: boolean
   hasClaudeCli: boolean
   settingsOpen: boolean
-  activeView: 'dashboard' | 'duplicates' | 'explore'
+  activeView: View
   toast: string | null
   permissions: AccessCheck[] | null
   isCheckingPermissions: boolean
@@ -42,11 +46,20 @@ interface SiftState {
   scanPreferences: ScanPreferences | null
   categoryDefs: Array<{ id: string; label: string; risk: RiskLevel }> | null
   folderCache: Record<string, FolderListing>
+  aiApps: AiAppsReport | null
+  isScanningAiApps: boolean
+  hiddenSpace: HiddenSpaceReport | null
+  isScanningHiddenSpace: boolean
+
+  runAiAppsScan: () => Promise<void>
+  runHiddenSpaceScan: () => Promise<void>
+  quitApp: (name: string) => Promise<void>
+  deleteSnapshots: (dates: string[]) => Promise<void>
 
   setHasApiKey: (v: boolean) => void
   setHasClaudeCli: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
-  setActiveView: (v: 'dashboard' | 'duplicates' | 'explore') => void
+  setActiveView: (v: View) => void
   toggleSelected: (path: string) => void
   clearSelected: () => void
   selectAllInCategory: (paths: string[]) => void
@@ -111,6 +124,54 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   scanPreferences: null,
   categoryDefs: null,
   folderCache: {},
+  aiApps: null,
+  isScanningAiApps: false,
+  hiddenSpace: null,
+  isScanningHiddenSpace: false,
+
+  runAiAppsScan: async (): Promise<void> => {
+    set({ isScanningAiApps: true })
+    try {
+      set({ aiApps: await window.api.scanAiApps(), isScanningAiApps: false })
+    } catch (err) {
+      set({ isScanningAiApps: false })
+      get().showToast(err instanceof Error ? err.message : 'AI app scan failed')
+    }
+  },
+
+  runHiddenSpaceScan: async (): Promise<void> => {
+    set({ isScanningHiddenSpace: true })
+    try {
+      set({ hiddenSpace: await window.api.scanHiddenSpace(), isScanningHiddenSpace: false })
+    } catch (err) {
+      set({ isScanningHiddenSpace: false })
+      get().showToast(err instanceof Error ? err.message : 'Scan failed')
+    }
+  },
+
+  quitApp: async (name): Promise<void> => {
+    try {
+      await window.api.quitApp(name)
+      get().showToast(`${name} quit`)
+      // Give the OS a moment to release the app's files before re-measuring.
+      await new Promise((r) => setTimeout(r, 1500))
+      await Promise.all([get().runHiddenSpaceScan(), get().runAiAppsScan()])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not quit app'
+      if (!/cancel/i.test(msg)) get().showToast(msg)
+    }
+  },
+
+  deleteSnapshots: async (dates): Promise<void> => {
+    try {
+      const n = await window.api.deleteSnapshots(dates)
+      get().showToast(`Deleted ${n} snapshot(s)`)
+      await get().runHiddenSpaceScan()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not delete snapshots'
+      if (!/cancel/i.test(msg)) get().showToast(msg)
+    }
+  },
 
   setHasApiKey: (v): void => set({ hasApiKey: v }),
   setHasClaudeCli: (v): void => set({ hasClaudeCli: v }),

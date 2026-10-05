@@ -223,6 +223,25 @@ export default function SettingsModal(): React.JSX.Element | null {
               {numberField('Background scan (hours)', 'backgroundScanHours', 'Menu bar rescan')}
             </div>
 
+            <div className="rounded-lg border border-[var(--sift-border)] p-3 space-y-2">
+              <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draft.lowSpaceAlertsEnabled}
+                  onChange={() =>
+                    setDraft({ ...draft, lowSpaceAlertsEnabled: !draft.lowSpaceAlertsEnabled })
+                  }
+                  className="accent-[var(--sift-accent)]"
+                />
+                Notify me when free space runs low
+              </label>
+              {draft.lowSpaceAlertsEnabled && (
+                <div className="grid grid-cols-2 gap-3">
+                  {numberField('Alert below (GB free)', 'lowSpaceThresholdGb', 'Startup disk')}
+                </div>
+              )}
+            </div>
+
             <div>
               <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
                 Categories

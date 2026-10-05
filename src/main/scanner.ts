@@ -427,7 +427,7 @@ export function parseDfOutput(stdout: string): Array<{
   })
 }
 
-async function listVolumes(): Promise<{
+export async function listVolumes(): Promise<{
   total: number
   free: number
   volumes: Array<{ device: string; totalBytes: number; freeBytes: number; mountPoint: string }>

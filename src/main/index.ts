@@ -4,6 +4,8 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { listFolder, requestScanCancel, runFullScan, ScanCancelledError } from './scanner'
 import { findDuplicates } from './duplicates'
+import { scanAiApps } from './aiApps'
+import { scanHiddenSpace, quitApp, deleteSnapshots } from './hiddenSpace'
 import { emptyTrash, moveToTrash } from './trashOps'
 import { getSuggestion, askAboutScan, hasClaudeCli } from './ai'
 import {
@@ -22,16 +24,19 @@ import {
   setScanPreferences
 } from './config'
 import { checkAllPermissions, openPrivacySettings, type PrivacyPane } from './permissions'
+import { startSpaceMonitor, checkSpaceNow } from './spaceMonitor'
 import { createTray, getLastScanSummary, setLastScanSummary, rescheduleBackgroundScan } from './tray'
 import { CATEGORY_DEFS } from './categories'
 import type { ScanPreferences, ScanSummary } from '../shared/types'
 import type { Tray } from 'electron'
 
 let isQuitting = false
+/** The window only exists while open — destroying it when closed frees the renderer process (~100+ MB). */
+let mainWindow: BrowserWindow | null = null
 let trayRef: Tray | null = null
 
 function createWindow(): BrowserWindow {
-  const mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1080,
     height: 760,
     minWidth: 820,
@@ -46,29 +51,36 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  win.on('ready-to-show', () => {
+    win.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // Menu-bar companion behavior: closing the window hides it (Tray > Quit Sift is the real exit).
-  mainWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault()
-      mainWindow.hide()
-    }
-  })
-
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  win.on('closed', () => {
+    mainWindow = null
+    // No window left: leave only the menu-bar item, with no Dock icon.
+    if (!isQuitting) app.dock?.hide()
+  })
+
+  return win
+}
+
+/** Returns the open window, creating (or re-showing) it if the app is running in the background. */
+function ensureWindow(): BrowserWindow {
+  if (!mainWindow) {
+    mainWindow = createWindow()
+    app.dock?.show()
+  }
   return mainWindow
 }
 
@@ -83,10 +95,11 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  const mainWindow = createWindow()
+  ensureWindow()
 
   if (process.platform === 'darwin') {
-    trayRef = createTray(() => mainWindow)
+    trayRef = createTray(ensureWindow)
+    startSpaceMonitor(ensureWindow)
   }
 
   ipcMain.handle('sift:getLastScanSummary', async () => getLastScanSummary())
@@ -97,7 +110,8 @@ app.whenReady().then(() => {
     try {
       const summary = await runFullScan(
         (label, done, total) => {
-          event.sender.send('sift:scan-progress', { label, done, total })
+          // The window may be closed (and destroyed) mid-scan; the scan itself keeps going.
+          if (!event.sender.isDestroyed()) event.sender.send('sift:scan-progress', { label, done, total })
         },
         ignored,
         prefs
@@ -122,6 +136,11 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:findDuplicates', async () => {
     return findDuplicates()
   })
+
+  ipcMain.handle('sift:scanAiApps', async () => scanAiApps())
+  ipcMain.handle('sift:scanHiddenSpace', async () => scanHiddenSpace())
+  ipcMain.handle('sift:quitApp', async (_event, name: string) => quitApp(name))
+  ipcMain.handle('sift:deleteSnapshots', async (_event, dates: string[]) => deleteSnapshots(dates))
 
   ipcMain.handle('sift:trash', async (_event, paths: string[]) => {
     const result = await moveToTrash(paths)
@@ -170,6 +189,7 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:setScanPreferences', async (_event, prefs: Partial<ScanPreferences>) => {
     const next = await setScanPreferences(prefs)
     await rescheduleBackgroundScan()
+    await checkSpaceNow()
     return next
   })
   ipcMain.handle('sift:getCategoryDefs', async () =>
@@ -194,7 +214,7 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:clearApiKey', async () => clearApiKey())
 
   ipcMain.handle('sift:confirmTrash', async (_event, count: number, sizeLabel: string) => {
-    const result = await dialog.showMessageBox(mainWindow, {
+    const result = await dialog.showMessageBox(ensureWindow(), {
       type: 'warning',
       buttons: ['Move to Trash', 'Cancel'],
       defaultId: 1,
@@ -207,7 +227,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('sift:confirmEmptyTrash', async (_event, sizeLabel: string) => {
-    const result = await dialog.showMessageBox(mainWindow, {
+    const result = await dialog.showMessageBox(ensureWindow(), {
       type: 'warning',
       buttons: ['Empty Trash', 'Cancel'],
       defaultId: 1,
@@ -220,12 +240,7 @@ app.whenReady().then(() => {
   })
 
   app.on('activate', function () {
-    const existing = BrowserWindow.getAllWindows()[0]
-    if (existing) {
-      existing.show()
-    } else {
-      createWindow()
-    }
+    ensureWindow().show()
   })
 })
 

@@ -9,6 +9,8 @@ export const DEFAULT_SCAN_PREFERENCES: ScanPreferences = {
   mailMinAgeDays: 30,
   archivesMinAgeDays: 90,
   backgroundScanHours: 4,
+  lowSpaceAlertsEnabled: true,
+  lowSpaceThresholdGb: 20,
   disabledCategoryIds: []
 }
 
@@ -49,6 +51,16 @@ export function normalizeScanPreferences(
       1,
       168,
       DEFAULT_SCAN_PREFERENCES.backgroundScanHours
+    ),
+    lowSpaceAlertsEnabled:
+      typeof merged.lowSpaceAlertsEnabled === 'boolean'
+        ? merged.lowSpaceAlertsEnabled
+        : DEFAULT_SCAN_PREFERENCES.lowSpaceAlertsEnabled,
+    lowSpaceThresholdGb: clampInt(
+      merged.lowSpaceThresholdGb,
+      1,
+      2000,
+      DEFAULT_SCAN_PREFERENCES.lowSpaceThresholdGb
     ),
     disabledCategoryIds: Array.isArray(merged.disabledCategoryIds)
       ? [...new Set(merged.disabledCategoryIds.filter((id) => typeof id === 'string'))]

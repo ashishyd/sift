@@ -2,10 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AccessCheck,
+  AiAppsReport,
   AiSuggestion,
   ClearHistoryEntry,
   DuplicatesResult,
   FolderListing,
+  HiddenSpaceReport,
   RiskLevel,
   ScanPreferences,
   ScanSummary,
@@ -26,6 +28,10 @@ const api = {
   cancelScan: (): Promise<void> => ipcRenderer.invoke('sift:cancelScan'),
   listFolder: (path: string): Promise<FolderListing> => ipcRenderer.invoke('sift:listFolder', path),
   findDuplicates: (): Promise<DuplicatesResult> => ipcRenderer.invoke('sift:findDuplicates'),
+  scanAiApps: (): Promise<AiAppsReport> => ipcRenderer.invoke('sift:scanAiApps'),
+  scanHiddenSpace: (): Promise<HiddenSpaceReport> => ipcRenderer.invoke('sift:scanHiddenSpace'),
+  quitApp: (name: string): Promise<void> => ipcRenderer.invoke('sift:quitApp', name),
+  deleteSnapshots: (dates: string[]): Promise<number> => ipcRenderer.invoke('sift:deleteSnapshots', dates),
   trash: (paths: string[]): Promise<TrashResult> => ipcRenderer.invoke('sift:trash', paths),
   emptyTrash: (): Promise<{ freedBytes: number }> => ipcRenderer.invoke('sift:emptyTrash'),
   revealInFinder: (path: string): Promise<void> => ipcRenderer.invoke('sift:revealInFinder', path),
@@ -52,6 +58,11 @@ const api = {
   getScanPreferences: (): Promise<ScanPreferences> => ipcRenderer.invoke('sift:getScanPreferences'),
   setScanPreferences: (prefs: Partial<ScanPreferences>): Promise<ScanPreferences> =>
     ipcRenderer.invoke('sift:setScanPreferences', prefs),
+  onNavigate: (cb: (view: string) => void): (() => void) => {
+    const listener = (_event: unknown, view: string): void => cb(view)
+    ipcRenderer.on('sift:navigate', listener)
+    return () => ipcRenderer.removeListener('sift:navigate', listener)
+  },
   getCategoryDefs: (): Promise<Array<{ id: string; label: string; risk: RiskLevel }>> =>
     ipcRenderer.invoke('sift:getCategoryDefs')
 }

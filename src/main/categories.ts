@@ -1,4 +1,4 @@
-import { homedir } from 'os'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import type { CategoryDef } from '../shared/types'
 
@@ -103,6 +103,15 @@ export const CATEGORY_DEFS: CategoryDef[] = [
     description: 'Docker Desktop VM disk image — images/containers you no longer use.',
     risk: 'review',
     paths: [h('Library', 'Containers', 'com.docker.docker', 'Data', 'vms')]
+  },
+  {
+    id: 'user-temp',
+    label: 'Temporary Files',
+    description:
+      'Per-user temp folder that macOS only fully clears on restart. Items under 2 days old are skipped since apps may be using them.',
+    risk: 'safe',
+    paths: [tmpdir()],
+    minAgeDays: 2
   },
   {
     id: 'trash',

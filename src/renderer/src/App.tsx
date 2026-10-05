@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import clsx from 'clsx'
-import { useSiftStore } from './store'
+import { useSiftStore, type View } from './store'
 import Dashboard from './components/Dashboard'
 import DuplicatesView from './components/DuplicatesView'
 import FolderTree from './components/FolderTree'
+import AiAppsView from './components/AiAppsView'
+import HiddenSpaceView from './components/HiddenSpaceView'
 import SettingsModal from './components/SettingsModal'
 import appIcon from './assets/app-icon.png'
 
@@ -17,6 +19,16 @@ function App(): React.JSX.Element {
   const setHasClaudeCli = useSiftStore((s) => s.setHasClaudeCli)
   const toast = useSiftStore((s) => s.toast)
   const loadCachedSummary = useSiftStore((s) => s.loadCachedSummary)
+
+  useEffect(
+    () =>
+      window.api.onNavigate((view) => {
+        if (['dashboard', 'explore', 'duplicates', 'ai-apps', 'hidden'].includes(view)) {
+          setActiveView(view as View)
+        }
+      }),
+    [setActiveView]
+  )
 
   useEffect(() => {
     window.api.hasApiKey().then(setHasApiKey)
@@ -40,7 +52,9 @@ function App(): React.JSX.Element {
               [
                 ['dashboard', 'Dashboard'],
                 ['explore', 'Explore'],
-                ['duplicates', 'Duplicates']
+                ['duplicates', 'Duplicates'],
+                ['ai-apps', 'AI Apps'],
+                ['hidden', 'Restart space']
               ] as const
             ).map(([id, label]) => (
               <button
@@ -78,6 +92,8 @@ function App(): React.JSX.Element {
         {activeView === 'dashboard' && <Dashboard />}
         {activeView === 'explore' && <FolderTree />}
         {activeView === 'duplicates' && <DuplicatesView />}
+        {activeView === 'ai-apps' && <AiAppsView />}
+        {activeView === 'hidden' && <HiddenSpaceView />}
       </main>
 
       <SettingsModal />
