@@ -2,10 +2,17 @@ import { dialog } from 'electron'
 import { promises as fs } from 'fs'
 import { userInfo } from 'os'
 import { run } from './exec'
-import type { HeldDeletedFile, HiddenSpaceReport, MemoryHog } from '../shared/types'
+import type { HeldDeletedFile, HiddenSpaceReport, MemoryHog, SimulatorRuntime } from '../shared/types'
 
 const MIN_HELD_BYTES = 10 * 1024 * 1024
 const MIN_HOG_BYTES = 400 * 1024 * 1024
+const RUNTIME_ID = /^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$/i
+const PLATFORM_NAMES: Record<string, string> = {
+  iphonesimulator: 'iOS',
+  appletvsimulator: 'tvOS',
+  watchsimulator: 'watchOS',
+  xrsimulator: 'visionOS'
+}
 const SNAPSHOT_DATE = /^\d{4}-\d{2}-\d{2}-\d{6}$/
 
 /** `sysctl -n vm.swapusage` → "total = 2048.00M  used = 1014.31M  free = 1033.69M  (encrypted)" */
@@ -85,6 +92,29 @@ export function parseMemoryHogs(out: string): MemoryHog[] {
     .slice(0, 8)
 }
 
+/** `xcrun simctl runtime list -j` → installed simulator runtimes, largest first. */
+export function parseSimulatorRuntimes(json: string): SimulatorRuntime[] {
+  let data: Record<string, Record<string, unknown>>
+  try {
+    data = JSON.parse(json)
+  } catch {
+    return []
+  }
+  return Object.values(data)
+    .filter((r) => typeof r.identifier === 'string' && typeof r.sizeBytes === 'number')
+    .map((r) => {
+      const platform = String(r.platformIdentifier ?? '').split('.').pop() ?? ''
+      return {
+        id: r.identifier as string,
+        name: `${PLATFORM_NAMES[platform] ?? 'Simulator'} ${r.version ?? ''}`.trim(),
+        sizeBytes: r.sizeBytes as number,
+        lastUsedAt: typeof r.lastUsedAt === 'string' ? r.lastUsedAt : null,
+        deletable: r.deletable === true
+      }
+    })
+    .sort((a, b) => b.sizeBytes - a.sizeBytes)
+}
+
 async function sleepImageBytes(): Promise<number> {
   try {
     return (await fs.stat('/private/var/vm/sleepimage')).size
@@ -95,13 +125,14 @@ async function sleepImageBytes(): Promise<number> {
 
 export async function scanHiddenSpace(): Promise<HiddenSpaceReport> {
   const uid = String(userInfo().uid)
-  const [swap, snaps, lsof, ps, sleep] = await Promise.all([
+  const [swap, snaps, lsof, ps, sleep, runtimes] = await Promise.all([
     run('sysctl', ['-n', 'vm.swapusage']),
     run('tmutil', ['listlocalsnapshots', '/']),
     // Own processes only: other users' files can't be freed from here.
     run('lsof', ['-nP', '-u', uid, '-F', 'pcsn', '+L1'], { maxBuffer: 1024 * 1024 * 64 }),
     run('ps', ['-axo', 'pid=,rss=,comm=']),
-    sleepImageBytes()
+    sleepImageBytes(),
+    run('xcrun', ['simctl', 'runtime', 'list', '-j'])
   ])
   const { totalBytes, usedBytes } = parseSwapUsage(swap.stdout)
   const heldDeleted = parseHeldDeleted(lsof.stdout)
@@ -113,7 +144,8 @@ export async function scanHiddenSpace(): Promise<HiddenSpaceReport> {
     snapshots: parseSnapshots(snaps.stdout),
     heldDeleted,
     heldDeletedBytes: heldDeleted.reduce((s, f) => s + f.sizeBytes, 0),
-    memoryHogs: parseMemoryHogs(ps.stdout)
+    memoryHogs: parseMemoryHogs(ps.stdout),
+    simulatorRuntimes: parseSimulatorRuntimes(runtimes.stdout)
   }
 }
 
@@ -154,4 +186,21 @@ export async function deleteSnapshots(dates: string[]): Promise<number> {
   ])
   if (code !== 0) throw new Error(stderr.trim() || 'Could not delete snapshots')
   return valid.length
+}
+
+/** Permanently removes a simulator runtime. Xcode can download it again later. */
+export async function deleteSimulatorRuntime(id: string, name: string): Promise<void> {
+  if (!RUNTIME_ID.test(id)) throw new Error('Invalid runtime id')
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Delete runtime', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    message: `Delete the ${name} simulator runtime?`,
+    detail:
+      'This is permanent, not a move to Trash. Simulators for this platform stop working until you re-download the runtime in Xcode > Settings > Components.'
+  })
+  if (response !== 0) throw new Error('Cancelled')
+  const { code, stderr } = await run('xcrun', ['simctl', 'runtime', 'delete', id])
+  if (code !== 0) throw new Error(stderr.trim() || `Could not delete ${name}`)
 }

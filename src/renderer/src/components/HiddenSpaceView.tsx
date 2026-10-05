@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { formatBytes } from '../lib/format'
+import { formatBytes, formatRelativeDate } from '../lib/format'
 import { useSiftStore } from '../store'
 
 function Section({
@@ -33,6 +33,7 @@ export default function HiddenSpaceView(): React.JSX.Element {
   const run = useSiftStore((s) => s.runHiddenSpaceScan)
   const quitApp = useSiftStore((s) => s.quitApp)
   const deleteSnapshots = useSiftStore((s) => s.deleteSnapshots)
+  const deleteRuntime = useSiftStore((s) => s.deleteSimulatorRuntime)
   const setActiveView = useSiftStore((s) => s.setActiveView)
 
   useEffect(() => {
@@ -123,6 +124,38 @@ export default function HiddenSpaceView(): React.JSX.Element {
                       className="text-[12.5px] font-medium text-[var(--sift-review)] hover:underline"
                     >
                       Quit
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <Section
+            title="Simulator runtimes"
+            detail="iOS/tvOS simulators Xcode downloaded. Keep the ones you test on; others can be re-downloaded from Xcode later."
+          >
+            {report.simulatorRuntimes.length === 0 ? (
+              <Empty text="No simulator runtimes installed." />
+            ) : (
+              <ul className="divide-y divide-[var(--sift-border)]">
+                {report.simulatorRuntimes.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px]">{r.name}</div>
+                      <div className="text-[11.5px] text-[var(--sift-text-muted)]">
+                        last used {formatRelativeDate(r.lastUsedAt)}
+                      </div>
+                    </div>
+                    <span className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)]">
+                      {formatBytes(r.sizeBytes)}
+                    </span>
+                    <button
+                      disabled={!r.deletable}
+                      onClick={() => deleteRuntime(r.id, r.name)}
+                      className="text-[12.5px] font-medium text-[var(--sift-review)] hover:underline disabled:opacity-40"
+                    >
+                      Delete…
                     </button>
                   </li>
                 ))}

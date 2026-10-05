@@ -171,6 +171,16 @@ export interface HeldDeletedFile {
   sizeBytes: number
 }
 
+/** An installed iOS/tvOS/watchOS/visionOS Simulator runtime (re-downloadable from Xcode). */
+export interface SimulatorRuntime {
+  id: string
+  /** e.g. "iOS 26.3.1" */
+  name: string
+  sizeBytes: number
+  lastUsedAt: string | null
+  deletable: boolean
+}
+
 export interface HiddenSpaceReport {
   scannedAt: string
   swapUsedBytes: number
@@ -182,4 +192,5 @@ export interface HiddenSpaceReport {
   heldDeleted: HeldDeletedFile[]
   heldDeletedBytes: number
   memoryHogs: MemoryHog[]
+  simulatorRuntimes: SimulatorRuntime[]
 }

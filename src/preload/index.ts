@@ -31,6 +31,8 @@ const api = {
   scanAiApps: (): Promise<AiAppsReport> => ipcRenderer.invoke('sift:scanAiApps'),
   scanHiddenSpace: (): Promise<HiddenSpaceReport> => ipcRenderer.invoke('sift:scanHiddenSpace'),
   quitApp: (name: string): Promise<void> => ipcRenderer.invoke('sift:quitApp', name),
+  deleteSimulatorRuntime: (id: string, name: string): Promise<void> =>
+    ipcRenderer.invoke('sift:deleteSimulatorRuntime', id, name),
   deleteSnapshots: (dates: string[]): Promise<number> => ipcRenderer.invoke('sift:deleteSnapshots', dates),
   trash: (paths: string[]): Promise<TrashResult> => ipcRenderer.invoke('sift:trash', paths),
   emptyTrash: (): Promise<{ freedBytes: number }> => ipcRenderer.invoke('sift:emptyTrash'),

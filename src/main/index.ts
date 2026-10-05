@@ -5,7 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { listFolder, requestScanCancel, runFullScan, ScanCancelledError } from './scanner'
 import { findDuplicates } from './duplicates'
 import { scanAiApps } from './aiApps'
-import { scanHiddenSpace, quitApp, deleteSnapshots } from './hiddenSpace'
+import { scanHiddenSpace, quitApp, deleteSnapshots, deleteSimulatorRuntime } from './hiddenSpace'
 import { emptyTrash, moveToTrash } from './trashOps'
 import { getSuggestion, askAboutScan, hasClaudeCli } from './ai'
 import {
@@ -140,6 +140,9 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:scanAiApps', async () => scanAiApps())
   ipcMain.handle('sift:scanHiddenSpace', async () => scanHiddenSpace())
   ipcMain.handle('sift:quitApp', async (_event, name: string) => quitApp(name))
+  ipcMain.handle('sift:deleteSimulatorRuntime', async (_event, id: string, name: string) =>
+    deleteSimulatorRuntime(id, name)
+  )
   ipcMain.handle('sift:deleteSnapshots', async (_event, dates: string[]) => deleteSnapshots(dates))
 
   ipcMain.handle('sift:trash', async (_event, paths: string[]) => {

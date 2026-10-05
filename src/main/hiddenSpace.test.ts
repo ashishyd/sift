@@ -32,3 +32,16 @@ describe('hiddenSpace parsers', () => {
     expect(hogs[0]).toMatchObject({ name: 'Foo', pids: [1, 2] })
   })
 })
+
+describe('parseSimulatorRuntimes', () => {
+  it('maps simctl JSON, largest first', async () => {
+    const { parseSimulatorRuntimes } = await import('./hiddenSpace')
+    const json = JSON.stringify({
+      A: { identifier: 'A', platformIdentifier: 'com.apple.platform.appletvsimulator', version: '26.2', sizeBytes: 5, deletable: true },
+      B: { identifier: 'B', platformIdentifier: 'com.apple.platform.iphonesimulator', version: '26.3.1', sizeBytes: 9, lastUsedAt: '2026-09-04T06:36:23Z', deletable: true }
+    })
+    const r = parseSimulatorRuntimes(json)
+    expect(r.map((x) => x.name)).toEqual(['iOS 26.3.1', 'tvOS 26.2'])
+    expect(parseSimulatorRuntimes('not json')).toEqual([])
+  })
+})

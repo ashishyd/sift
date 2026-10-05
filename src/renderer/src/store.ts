@@ -55,6 +55,7 @@ interface SiftState {
   runHiddenSpaceScan: () => Promise<void>
   quitApp: (name: string) => Promise<void>
   deleteSnapshots: (dates: string[]) => Promise<void>
+  deleteSimulatorRuntime: (id: string, name: string) => Promise<void>
 
   setHasApiKey: (v: boolean) => void
   setHasClaudeCli: (v: boolean) => void
@@ -158,6 +159,17 @@ export const useSiftStore = create<SiftState>((set, get) => ({
       await Promise.all([get().runHiddenSpaceScan(), get().runAiAppsScan()])
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not quit app'
+      if (!/cancel/i.test(msg)) get().showToast(msg)
+    }
+  },
+
+  deleteSimulatorRuntime: async (id, name): Promise<void> => {
+    try {
+      await window.api.deleteSimulatorRuntime(id, name)
+      get().showToast(`Deleted ${name} runtime`)
+      await get().runHiddenSpaceScan()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not delete runtime'
       if (!/cancel/i.test(msg)) get().showToast(msg)
     }
   },
