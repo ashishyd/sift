@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { homedir } from 'os'
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
 import { run, isPermissionError, isPermissionErrno } from './exec'
 import { CATEGORY_DEFS, DEV_SEARCH_ROOTS } from './categories'
 import {
@@ -9,6 +9,13 @@ import {
   dedupeOverlappingCategoryPaths
 } from '../shared/reclaimable'
 import { normalizeScanPreferences } from '../shared/preferences'
+import {
+  ARTIFACT_DIR_NAMES,
+  artifactKind,
+  isExcludedLocation,
+  needsGitIgnore,
+  restoreHint
+} from '../shared/staleArtifacts'
 import type {
   CategoryResult,
   FolderListing,
@@ -209,8 +216,35 @@ async function scanShallowCategory(
   }
 }
 
-async function scanNodeModules(): Promise<CategoryResult> {
+async function projectIsActive(
+  project: string,
+  minAgeDays: number
+): Promise<{ active: boolean; denied: boolean }> {
+  // Prune every artefact dir and .git so only the project's own files decide staleness.
+  const prune = ARTIFACT_DIR_NAMES.flatMap((n) => ['-name', n, '-o']).concat(['-name', '.git'])
+  const { stdout, stderr } = await run('find', [
+    project,
+    '-maxdepth',
+    '4',
+    '(',
+    ...prune,
+    ')',
+    '-prune',
+    '-o',
+    '-type',
+    'f',
+    '-mtime',
+    `-${minAgeDays}`,
+    '-print',
+    '-quit'
+  ])
+  return { active: stdout.trim().length > 0, denied: isPermissionError(stderr) }
+}
+
+async function scanStaleArtifacts(): Promise<CategoryResult> {
   const def = CATEGORY_DEFS.find((c) => c.id === 'node-modules')!
+  // shortcut: fixed 90 days from the category def, no Settings field; add a preference if asked.
+  const minAge = def.minAgeDays ?? 90
   const found = new Set<string>()
   let permissionDenied = false
 
@@ -223,32 +257,58 @@ async function scanNodeModules(): Promise<CategoryResult> {
       '6',
       '-type',
       'd',
+      '(',
       '-name',
-      'node_modules',
-      '-prune'
+      'Library',
+      ...ARTIFACT_DIR_NAMES.flatMap((n) => ['-o', '-name', n]),
+      ')',
+      '-prune',
+      '-print'
     ])
     if (isPermissionError(stderr)) permissionDenied = true
     stdout
       .split('\n')
       .map((l) => l.trim())
-      .filter(Boolean)
+      .filter((p) => p && ARTIFACT_DIR_NAMES.includes(basename(p)))
       .forEach((p) => found.add(p))
   }
 
   const items: ScanItem[] = []
   for (const dir of found) {
     throwIfCancelled()
+    if (isExcludedLocation(dir, homedir())) continue
+    const project = dirname(dir)
+    let parentFiles: string[]
+    try {
+      parentFiles = await fs.readdir(project)
+    } catch (err) {
+      if (isPermissionErrno(err)) permissionDenied = true
+      continue
+    }
+    const name = basename(dir)
+    if (!artifactKind(name, parentFiles)) continue
+    if (name === 'venv' && (await accessState(join(dir, 'pyvenv.cfg'))) !== 'ok') continue
+    if (needsGitIgnore(name)) {
+      const ignored = await run('git', ['-C', project, 'check-ignore', '-q', dir])
+      if (ignored.code !== 0) continue
+    }
+    const activity = await projectIsActive(project, minAge)
+    if (activity.denied) permissionDenied = true
+    // Unreadable project = unknown age, so leave it alone rather than guess it is stale.
+    if (activity.active || activity.denied) continue
+
     const st = await statItem(dir)
     const du = await duBytes(dir)
     if (du.denied) permissionDenied = true
     if (du.bytes <= 0) continue
     items.push({
       path: dir,
-      name: `${basename(dir.replace(/\/node_modules$/, ''))}/node_modules`,
+      name: `${basename(project)}/${name}`,
       sizeBytes: du.bytes,
       isDirectory: true,
       lastAccessed: st.atime,
-      lastModified: st.mtime
+      lastModified: st.mtime,
+      hint: restoreHint(name, parentFiles)
     })
   }
   items.sort((a, b) => b.sizeBytes - a.sizeBytes)
@@ -575,8 +635,8 @@ async function doFullScan(
 
   if (includeNode) {
     throwIfCancelled()
-    onProgress?.('Stray node_modules', done, totalSteps)
-    results.push(await scanNodeModules())
+    onProgress?.('Stale project artefacts', done, totalSteps)
+    results.push(await scanStaleArtifacts())
     done++
   }
 

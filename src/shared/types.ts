@@ -18,6 +18,8 @@ export interface ScanItem {
   isDirectory: boolean
   lastAccessed: string | null
   lastModified: string | null
+  /** Optional note shown on the row, e.g. the command that restores a cleared folder. */
+  hint?: string
 }
 
 export interface CategoryResult {
@@ -51,6 +53,15 @@ export interface ScanSummary {
   volumes: VolumeInfo[]
   categories: CategoryResult[]
   reclaimableBytes: number
+}
+
+/** One scan's totals, kept so the app can show what grew between scans. */
+export interface ScanSnapshot {
+  at: string
+  totalBytes: number
+  freeBytes: number
+  /** category id -> uncapped totalSizeBytes; missing / permission-denied categories are absent. */
+  categories: Record<string, number>
 }
 
 export interface VolumeInfo {

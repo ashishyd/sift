@@ -45,6 +45,9 @@ empty it yourself. The few actions that are permanent are called out in
   scan. Manage the list from Settings.
 - **Clear history.** Every clear is logged with date, item count and bytes
   freed, plus a running lifetime total in Settings.
+- **What grew.** Each scan is compared with the previous one: free-space change,
+  the categories that grew most, and a rough days-until-full estimate. Totals
+  are kept locally in `scan-history.json` (last 90 scans, sizes only).
 
 ### Get space back without restarting your Mac
 
@@ -136,9 +139,13 @@ developer the first time you open it. Right-click Sift in Applications, choose
 App caches, browser caches (Chrome, Firefox, Safari, Edge, Arc, Brave), Xcode
 DerivedData, Archives and iOS DeviceSupport, Simulator caches and runtimes,
 npm/pnpm/yarn, Gradle/Cargo/pip/CocoaPods, Homebrew cache, Docker Desktop data,
+local AI models (Hugging Face, LM Studio), Android emulator images, VM and
+container disks (OrbStack, Colima, Lima, UTM, Android AVDs),
 Trash, log files, temporary files, old Downloads, old disk images (DMG/ISO/PKG),
 iOS device backups, Mail downloads, Messages attachments, Pictures and Photos
-Library, stray `node_modules`, large and unused files, AI app data (Claude,
+Library, stale project artefacts (`node_modules`, `.next`/`.nuxt`/`dist`, Rust
+`target`, Python venvs in projects untouched for 90+ days, each with its restore
+command), large and unused files, AI app data (Claude,
 Cursor, ChatGPT/Codex), and Time Machine local snapshots.
 
 Thresholds such as file age and size are adjustable in Settings, and any

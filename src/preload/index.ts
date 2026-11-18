@@ -10,6 +10,7 @@ import type {
   HiddenSpaceReport,
   RiskLevel,
   ScanPreferences,
+  ScanSnapshot,
   ScanSummary,
   TrashResult
 } from '../shared/types'
@@ -57,6 +58,7 @@ const api = {
   ignorePaths: (paths: string[]): Promise<string[]> => ipcRenderer.invoke('sift:ignorePaths', paths),
   unignorePath: (path: string): Promise<string[]> => ipcRenderer.invoke('sift:unignorePath', path),
   getClearHistory: (): Promise<ClearHistoryEntry[]> => ipcRenderer.invoke('sift:getClearHistory'),
+  getScanHistory: (): Promise<ScanSnapshot[]> => ipcRenderer.invoke('sift:getScanHistory'),
   getScanPreferences: (): Promise<ScanPreferences> => ipcRenderer.invoke('sift:getScanPreferences'),
   setScanPreferences: (prefs: Partial<ScanPreferences>): Promise<ScanPreferences> =>
     ipcRenderer.invoke('sift:setScanPreferences', prefs),

@@ -3,7 +3,8 @@ import { promises as fs } from 'fs'
 import { join } from 'path'
 import { computeReclaimableBytes } from '../shared/reclaimable'
 import { normalizeScanPreferences } from '../shared/preferences'
-import type { ClearHistoryEntry, ScanPreferences, ScanSummary } from '../shared/types'
+import { appendSnapshot, snapshotOf } from '../shared/growth'
+import type { ClearHistoryEntry, ScanPreferences, ScanSnapshot, ScanSummary } from '../shared/types'
 
 const MAX_HISTORY_ENTRIES = 100
 
@@ -129,6 +130,30 @@ export async function loadLastScan(): Promise<ScanSummary | null> {
     return JSON.parse(await fs.readFile(lastScanPath(), 'utf-8')) as ScanSummary
   } catch {
     return null
+  }
+}
+
+function scanHistoryPath(): string {
+  return join(app.getPath('userData'), 'scan-history.json')
+}
+
+export async function getScanHistory(): Promise<ScanSnapshot[]> {
+  try {
+    const list = JSON.parse(await fs.readFile(scanHistoryPath(), 'utf-8'))
+    return Array.isArray(list) ? list : []
+  } catch {
+    return []
+  }
+}
+
+/** Call once per completed full scan, not after trash prunes. Best-effort like the scan cache. */
+export async function appendScanSnapshot(summary: ScanSummary): Promise<void> {
+  try {
+    const next = appendSnapshot(await getScanHistory(), snapshotOf(summary))
+    await fs.mkdir(app.getPath('userData'), { recursive: true })
+    await fs.writeFile(scanHistoryPath(), JSON.stringify(next), 'utf-8')
+  } catch {
+    // history is best-effort
   }
 }
 

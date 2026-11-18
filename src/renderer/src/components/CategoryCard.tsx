@@ -103,6 +103,7 @@ export default function CategoryCard({ category }: { category: CategoryResult })
                   </div>
                   <div className="text-[11.5px] text-[var(--sift-text-muted)]">
                     {item.isDirectory ? 'Folder' : 'File'} · modified {formatRelativeDate(item.lastModified)}
+                    {item.hint && ` · restore: ${item.hint}`}
                   </div>
                 </div>
                 <span className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)] shrink-0">

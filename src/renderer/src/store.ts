@@ -10,6 +10,7 @@ import type {
   HiddenSpaceReport,
   RiskLevel,
   ScanPreferences,
+  ScanSnapshot,
   ScanSummary
 } from '@shared/types'
 import { formatBytes } from './lib/format'
@@ -41,6 +42,7 @@ interface SiftState {
   isCheckingPermissions: boolean
   ignoredPaths: string[] | null
   clearHistory: ClearHistoryEntry[] | null
+  scanHistory: ScanSnapshot[] | null
   aiChat: Array<{ question: string; answer: string }>
   isAskingAi: boolean
   scanPreferences: ScanPreferences | null
@@ -78,6 +80,7 @@ interface SiftState {
   unignorePath: (path: string) => Promise<void>
   refreshIgnoredPaths: () => Promise<void>
   refreshClearHistory: () => Promise<void>
+  refreshScanHistory: () => Promise<void>
   askAi: (question: string) => Promise<void>
   loadCachedSummary: () => Promise<void>
   loadScanPreferences: () => Promise<void>
@@ -120,6 +123,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   isCheckingPermissions: false,
   ignoredPaths: null,
   clearHistory: null,
+  scanHistory: null,
   aiChat: [],
   isAskingAi: false,
   scanPreferences: null,
@@ -230,6 +234,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
         }))
       )
       set({ summary, isScanning: false, progress: null })
+      get().refreshScanHistory()
     } catch (err) {
       set({ isScanning: false, progress: null })
       const message = err instanceof Error ? err.message : 'Scan failed'
@@ -450,6 +455,11 @@ export const useSiftStore = create<SiftState>((set, get) => ({
     set({ clearHistory })
   },
 
+  refreshScanHistory: async (): Promise<void> => {
+    const scanHistory = await window.api.getScanHistory()
+    set({ scanHistory })
+  },
+
   askAi: async (question): Promise<void> => {
     const { summary } = get()
     if (!summary || !question.trim()) return
@@ -470,6 +480,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
     if (get().summary) return
     const cached = await window.api.getLastScanSummary()
     if (cached && !get().summary) set({ summary: cached })
+    get().refreshScanHistory()
   },
 
   loadScanPreferences: async (): Promise<void> => {

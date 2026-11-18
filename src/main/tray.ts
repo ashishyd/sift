@@ -3,7 +3,13 @@ import { readFileSync } from 'fs'
 import trayIconAsset from '../../resources/trayTemplate.png?asset'
 import trayIconAsset2x from '../../resources/trayTemplate@2x.png?asset'
 import { runFullScan, ScanCancelledError } from './scanner'
-import { getIgnoredPaths, getScanPreferences, loadLastScan, saveLastScan } from './config'
+import {
+  getIgnoredPaths,
+  getScanPreferences,
+  loadLastScan,
+  saveLastScan,
+  appendScanSnapshot
+} from './config'
 import type { ScanSummary } from '../shared/types'
 
 const FIRST_SCAN_DELAY_MS = 30 * 1000 // let the app settle before any TCC prompts can fire
@@ -40,6 +46,7 @@ async function runBackgroundScan(): Promise<void> {
     const prefs = await getScanPreferences()
     lastSummary = await runFullScan(undefined, ignored, prefs)
     await saveLastScan(lastSummary)
+    await appendScanSnapshot(lastSummary)
     tray?.setTitle(` ${formatBytesShort(lastSummary.reclaimableBytes)}`)
   } catch (err) {
     if (err instanceof ScanCancelledError) return

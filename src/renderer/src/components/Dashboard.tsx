@@ -1,6 +1,7 @@
 import { useSiftStore } from '../store'
 import { formatBytes } from '../lib/format'
 import DiskLedger from './DiskLedger'
+import GrowthCard from './GrowthCard'
 import CategoryCard from './CategoryCard'
 import VolumesList from './VolumesList'
 import AiPanel from './AiPanel'
@@ -159,6 +160,7 @@ export default function Dashboard(): React.JSX.Element {
       </header>
 
       <DiskLedger />
+      <GrowthCard />
       <PermissionsBanner />
 
       <div className="flex flex-wrap items-start gap-4">

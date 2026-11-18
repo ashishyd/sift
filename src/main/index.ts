@@ -18,6 +18,8 @@ import {
   getClearHistory,
   appendClearHistory,
   saveLastScan,
+  appendScanSnapshot,
+  getScanHistory,
   loadLastScan,
   pruneLastScan,
   getScanPreferences,
@@ -118,6 +120,7 @@ app.whenReady().then(() => {
       )
       setLastScanSummary(summary)
       await saveLastScan(summary)
+      await appendScanSnapshot(summary)
       return summary
     } catch (err) {
       if (err instanceof ScanCancelledError) {
@@ -187,6 +190,7 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:ignorePaths', async (_event, paths: string[]) => ignorePaths(paths))
   ipcMain.handle('sift:unignorePath', async (_event, path: string) => unignorePath(path))
   ipcMain.handle('sift:getClearHistory', async () => getClearHistory())
+  ipcMain.handle('sift:getScanHistory', async () => getScanHistory())
 
   ipcMain.handle('sift:getScanPreferences', async () => getScanPreferences())
   ipcMain.handle('sift:setScanPreferences', async (_event, prefs: Partial<ScanPreferences>) => {

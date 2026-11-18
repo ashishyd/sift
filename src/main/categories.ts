@@ -105,6 +105,39 @@ export const CATEGORY_DEFS: CategoryDef[] = [
     paths: [h('Library', 'Containers', 'com.docker.docker', 'Data', 'vms')]
   },
   {
+    id: 'ai-model-caches',
+    label: 'Local AI models',
+    description:
+      'Hugging Face and LM Studio model downloads. Re-downloaded when a tool needs them, which can be many GB and may need a login.',
+    risk: 'caution',
+    paths: [
+      h('.cache', 'huggingface', 'hub'),
+      h('.lmstudio', 'models'),
+      h('.cache', 'lm-studio', 'models')
+    ]
+  },
+  {
+    id: 'android-system-images',
+    label: 'Android emulator images',
+    description: 'Android SDK system images for emulators. Android Studio downloads them again on demand.',
+    risk: 'caution',
+    paths: [h('Library', 'Android', 'sdk', 'system-images')]
+  },
+  {
+    id: 'vm-container-stores',
+    label: 'VMs & container engines',
+    description:
+      'OrbStack, Colima, Lima, UTM and Android emulator disks. These can hold container volumes, databases and emulator state — check before clearing.',
+    risk: 'review',
+    paths: [
+      h('Library', 'Group Containers', 'HUAQ24HBR6.dev.orbstack', 'data'),
+      h('.colima'),
+      h('.lima'),
+      h('Library', 'Containers', 'com.utmapp.UTM', 'Data', 'Documents'),
+      h('.android', 'avd')
+    ]
+  },
+  {
     id: 'user-temp',
     label: 'Temporary Files',
     description:
@@ -180,10 +213,12 @@ export const CATEGORY_DEFS: CategoryDef[] = [
   },
   {
     id: 'node-modules',
-    label: 'Stray node_modules',
-    description: 'node_modules folders in your dev directories — reinstallable with a package manager.',
-    risk: 'review',
-    paths: []
+    label: 'Stale project artefacts',
+    description:
+      'node_modules, build output, Rust target and Python venvs in projects with no file changes for 90+ days. Each row shows the command that restores it.',
+    risk: 'caution',
+    paths: [],
+    minAgeDays: 90
   },
   {
     id: 'large-files',
