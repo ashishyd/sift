@@ -4,12 +4,17 @@ import type { CategoryResult, RiskLevel, ScanItem } from '@shared/types'
 import { categoryHiddenStats } from '@shared/preferences'
 import { formatBytes, formatRelativeDate } from '../lib/format'
 import { useSiftStore } from '../store'
-import RiskBadge from './RiskBadge'
 
-const RISK_TEXT_COLOR: Record<RiskLevel, string> = {
-  safe: 'text-[var(--sift-safe)]',
-  caution: 'text-[var(--sift-caution)]',
-  review: 'text-[var(--sift-review)]'
+const RISK_BG: Record<RiskLevel, string> = {
+  safe: 'bg-[var(--sift-safe)]',
+  caution: 'bg-[var(--sift-caution)]',
+  review: 'bg-[var(--sift-review)]'
+}
+
+const RISK_LABEL: Record<RiskLevel, string> = {
+  safe: 'Safe to clear',
+  caution: 'Use caution',
+  review: 'Review first'
 }
 
 function Chevron({ expanded }: { expanded: boolean }): React.JSX.Element {
@@ -54,7 +59,15 @@ function FileIcon(): React.JSX.Element {
   )
 }
 
-function ItemNode({ item, depth }: { item: ScanItem; depth: number }): React.JSX.Element {
+function ItemNode({
+  item,
+  depth,
+  parentBytes
+}: {
+  item: ScanItem
+  depth: number
+  parentBytes: number
+}): React.JSX.Element {
   const selected = useSiftStore((s) => s.selected)
   const toggleSelected = useSiftStore((s) => s.toggleSelected)
   const ignoreItems = useSiftStore((s) => s.ignoreItems)
@@ -64,6 +77,8 @@ function ItemNode({ item, depth }: { item: ScanItem; depth: number }): React.JSX
   const [loading, setLoading] = useState(false)
   const isSelected = selected.has(item.path)
   const listing = folderCache[item.path]
+  const share =
+    parentBytes > 0 ? Math.min(100, Math.round((item.sizeBytes / parentBytes) * 100)) : 0
 
   const toggleExpand = async (): Promise<void> => {
     if (!item.isDirectory) return
@@ -105,6 +120,13 @@ function ItemNode({ item, depth }: { item: ScanItem; depth: number }): React.JSX
         <span className="text-[11px] text-[var(--sift-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           modified {formatRelativeDate(item.lastModified)}
         </span>
+        <div
+          role="img"
+          aria-label={`${share}% of parent`}
+          className="h-1 w-[120px] shrink-0 overflow-hidden rounded-full bg-[#1e222c]"
+        >
+          <div className="h-1 bg-[var(--sift-accent)]" style={{ width: `${share}%` }} />
+        </div>
         <span className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)] w-16 text-right shrink-0">
           {formatBytes(item.sizeBytes)}
         </span>
@@ -135,7 +157,12 @@ function ItemNode({ item, depth }: { item: ScanItem; depth: number }): React.JSX
           )}
           {!loading &&
             listing?.entries.map((child) => (
-              <ItemNode key={child.path} item={child} depth={depth + 1} />
+              <ItemNode
+                key={child.path}
+                item={child}
+                depth={depth + 1}
+                parentBytes={item.sizeBytes}
+              />
             ))}
           {!loading && listing && listing.entries.length === 0 && !listing.permissionDenied && (
             <p className="text-[12px] text-[var(--sift-text-muted)] py-1.5 pl-3">Empty folder</p>
@@ -177,9 +204,12 @@ function CategoryRow({
           onChange={() => selectAllInCategory(paths)}
           className="accent-[var(--sift-accent)] shrink-0"
         />
-        <FolderIcon className={RISK_TEXT_COLOR[category.risk]} />
+        <span
+          aria-hidden="true"
+          className={clsx('size-2 shrink-0 rounded-sm', RISK_BG[category.risk])}
+        />
         <span className="font-medium text-[13.5px] truncate">{category.label}</span>
-        <RiskBadge risk={category.risk} />
+        <span className="sr-only">{RISK_LABEL[category.risk]}</span>
       </button>
       <span className="text-[12px] text-[var(--sift-text-muted)] shrink-0">
         {category.matchedItemCount ?? category.items.length} item(s)
@@ -249,46 +279,32 @@ export default function FolderTree(): React.JSX.Element {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-[16px]">Explore</h2>
-          <p className="text-[12.5px] text-[var(--sift-text-muted)] mt-0.5">
-            Expand categories and folders — children are sized and sorted largest first.
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-[16px] font-semibold">Explore</h1>
+          <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+            Expand categories and folders. Children are sized and sorted largest first.
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 text-[11.5px] text-[var(--sift-text-muted)]">
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[var(--sift-safe)]" />
-              Safe
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[var(--sift-caution)]" />
-              Caution
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[var(--sift-review)]" />
-              Review
-            </span>
+        <div className="flex flex-wrap items-center gap-4 text-[12px]">
+          <div className="flex items-center gap-3 text-[var(--sift-text-muted)]">
+            {(['safe', 'caution', 'review'] as const).map((r) => (
+              <span key={r} className="flex items-center gap-1.5">
+                <span aria-hidden="true" className={clsx('size-2 rounded-sm', RISK_BG[r])} />
+                {r === 'safe' ? 'Safe' : r === 'caution' ? 'Caution' : 'Review'}
+              </span>
+            ))}
           </div>
-          {trashCategory && (
-            <button
-              onClick={emptyTrash}
-              className="text-[12px] font-medium text-[var(--sift-review)] hover:underline"
-            >
-              Empty Trash ({formatBytes(trashCategory.totalSizeBytes)})
-            </button>
-          )}
           <button
             onClick={() =>
               setExpanded(allExpanded ? new Set() : new Set(categories.map((c) => c.id)))
             }
-            className="text-[12px] text-[var(--sift-accent)] hover:underline"
+            className="rounded-lg border border-[var(--sift-border)] px-3 py-1.5 text-[12.5px] hover:bg-white/5"
           >
             {allExpanded ? 'Collapse all' : 'Expand all'}
           </button>
         </div>
-      </div>
+      </header>
 
       <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-2">
         {categories.map((category) => {
@@ -304,12 +320,17 @@ export default function FolderTree(): React.JSX.Element {
               {isExpanded && (
                 <div className="ml-[19px] pl-2 border-l border-[var(--sift-border)] mb-1">
                   {category.items.map((item) => (
-                    <ItemNode key={item.path} item={item} depth={0} />
+                    <ItemNode
+                      key={item.path}
+                      item={item}
+                      depth={0}
+                      parentBytes={category.totalSizeBytes}
+                    />
                   ))}
                   {hidden.count > 0 && (
                     <p className="text-[12px] text-[var(--sift-text-muted)] py-1.5 pl-7">
-                      +{hidden.count} more ({formatBytes(hidden.bytes)}) — list capped; totals include
-                      them
+                      +{hidden.count} more ({formatBytes(hidden.bytes)}) — list capped; totals
+                      include them
                     </p>
                   )}
                 </div>
@@ -319,23 +340,44 @@ export default function FolderTree(): React.JSX.Element {
         })}
       </div>
 
+      {trashCategory && (
+        <div className="flex justify-end pb-4">
+          <button
+            onClick={emptyTrash}
+            className="px-2 py-1.5 text-[12.5px] font-medium text-[var(--sift-review)] hover:underline"
+          >
+            Empty Trash permanently… ({formatBytes(trashCategory.totalSizeBytes)})
+          </button>
+        </div>
+      )}
+
       {selected.size > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-[var(--sift-review)]/30 bg-[var(--sift-review)]/10 px-4 py-2.5">
+        <div
+          role="region"
+          aria-label="Selection"
+          className="sticky bottom-0 -mx-8 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sift-border)] bg-[var(--sift-surface)]/95 px-8 py-3 backdrop-blur"
+        >
           <span className="text-[13px]">
-            {selected.size} item(s) · {formatBytes(selectedBytes)} selected
+            <strong className="font-semibold tabular-nums">
+              {selected.size} item(s) · {formatBytes(selectedBytes)}
+            </strong>
+            <span className="text-[var(--sift-text-muted)]">
+              {' '}
+              selected · moves to Trash, recoverable
+            </span>
           </span>
           <div className="flex gap-2">
             <button
-              onClick={trashSelected}
-              className="rounded-lg bg-[var(--sift-review)] px-3 py-1.5 text-[12.5px] font-medium text-black"
-            >
-              Move to Trash
-            </button>
-            <button
               onClick={clearSelected}
-              className="rounded-lg px-3 py-1.5 text-[12.5px] text-[var(--sift-text-muted)] hover:bg-white/5"
+              className="rounded-lg px-3 py-2 text-[12.5px] text-[var(--sift-text-muted)] hover:bg-white/5"
             >
               Deselect
+            </button>
+            <button
+              onClick={trashSelected}
+              className="rounded-lg bg-[var(--sift-review)] px-4 py-2 text-[12.5px] font-medium text-black"
+            >
+              Move to Trash
             </button>
           </div>
         </div>

@@ -11,53 +11,72 @@ export default function DuplicatesView(): React.JSX.Element {
   /** hash → path to keep (defaults to oldest / files[0]) */
   const [keepers, setKeepers] = useState<Record<string, string>>({})
 
+  const fileCount = duplicates?.groups.reduce((n, g) => n + g.files.length, 0) ?? 0
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-[16px]">Duplicate files</h2>
-          <p className="text-[12.5px] text-[var(--sift-text-muted)] mt-0.5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-[16px] font-semibold">Duplicate files</h1>
+          <p className="text-[12.5px] text-[var(--sift-text-muted)]">
             Exact-content duplicates in Desktop, Documents, Downloads and Pictures.
           </p>
         </div>
         <button
           onClick={runDuplicateScan}
           disabled={isScanningDuplicates}
-          className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-2 text-[13px] font-medium text-black disabled:opacity-50"
+          className={
+            duplicates
+              ? 'rounded-lg border border-[var(--sift-border)] px-3.5 py-2 text-[12.5px] hover:bg-white/5 disabled:opacity-50'
+              : 'rounded-lg bg-[var(--sift-accent)] px-3.5 py-2 text-[13px] font-medium text-black disabled:opacity-50'
+          }
         >
           {isScanningDuplicates ? 'Scanning…' : duplicates ? 'Rescan' : 'Scan for duplicates'}
         </button>
-      </div>
+      </header>
 
       {duplicates && (
-        <div>
-          <p className="text-[13px] text-[var(--sift-text-muted)]">
-            Found {duplicates.groups.length} duplicate group(s) — up to{' '}
-            <span className="text-[var(--sift-accent)] font-medium">
-              {formatBytes(duplicates.reclaimableBytes)}
-            </span>{' '}
-            reclaimable by keeping one copy of each.
+        <section
+          aria-labelledby="dup-sum"
+          className="flex flex-wrap items-end justify-between gap-4 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-5"
+        >
+          <div className="space-y-1">
+            <h2 id="dup-sum" className="text-[12.5px] text-[var(--sift-text-muted)]">
+              Up to this much, by keeping one copy of each
+            </h2>
+            <div className="flex items-baseline gap-2.5">
+              <span className="text-[32px] font-semibold tracking-tight tabular-nums">
+                {formatBytes(duplicates.reclaimableBytes)}
+              </span>
+              <span className="text-[13px] text-[var(--sift-text-muted)] tabular-nums">
+                in {duplicates.groups.length} group(s) · {fileCount} file(s)
+              </span>
+            </div>
+          </div>
+          <p className="max-w-[300px] text-[12px] leading-relaxed text-[var(--sift-text-muted)]">
+            The oldest copy is kept by default. Choose another copy in a group to keep that one
+            instead. Trashed copies are recoverable.
           </p>
-          <p className="text-[12px] text-[var(--sift-text-muted)]/80 mt-0.5">
-            Oldest copy is kept by default — choose &quot;Keep this&quot; on another path if you prefer.
-          </p>
-        </div>
+        </section>
       )}
 
       {duplicates?.permissionDenied && (
-        <div className="rounded-xl border border-[var(--sift-caution)]/30 bg-[var(--sift-caution)]/10 p-3.5 flex items-start gap-3">
-          <span className="text-[var(--sift-caution)] text-base leading-none mt-0.5">⚠</span>
-          <div className="flex-1">
-            <p className="text-[13px]">
-              Some folders couldn&apos;t be fully read — results may be incomplete.
-            </p>
-            <button
-              onClick={() => openPrivacySettings('files')}
-              className="text-[12.5px] font-medium text-[var(--sift-caution)] hover:underline mt-1"
-            >
-              Open Privacy Settings
-            </button>
-          </div>
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[var(--sift-caution)]/30 bg-[var(--sift-caution)]/10 px-3.5 py-2.5 text-[12.5px]"
+        >
+          <span>
+            <span aria-hidden="true" className="text-[var(--sift-caution)]">
+              ⚠{' '}
+            </span>
+            Some folders couldn&apos;t be fully read — results may be incomplete.
+          </span>
+          <button
+            onClick={() => openPrivacySettings('files')}
+            className="font-medium text-[var(--sift-caution)] hover:underline"
+          >
+            Open Privacy Settings
+          </button>
         </div>
       )}
 
@@ -65,56 +84,89 @@ export default function DuplicatesView(): React.JSX.Element {
         {duplicates?.groups.map((group) => {
           const keeper = keepers[group.hash] ?? group.files[0]
           const toTrash = group.files.filter((f) => f !== keeper)
+          const chosen = keepers[group.hash] !== undefined && keeper !== group.files[0]
           return (
-            <div
+            <fieldset
               key={group.hash}
-              className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3"
+              className="m-0 min-w-0 overflow-hidden rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-0"
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[12.5px] text-[var(--sift-text-muted)]">
-                  {group.files.length} copies · {formatBytes(group.sizeBytes)} each
+              <legend className="sr-only">
+                {group.files.length} copies of {group.files[0]}
+              </legend>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--sift-border)] px-4 py-3">
+                <span className="text-[13.5px] font-medium">
+                  {group.files.length} copies{' '}
+                  <span className="font-normal text-[var(--sift-text-muted)]">
+                    · {formatBytes(group.sizeBytes)} each · frees{' '}
+                    {formatBytes(group.sizeBytes * toTrash.length)}
+                  </span>
                 </span>
                 <button
                   onClick={() => trashPaths(toTrash)}
                   disabled={toTrash.length === 0}
-                  className="text-[12px] font-medium text-[var(--sift-review)] hover:underline disabled:opacity-40"
+                  className="rounded-lg bg-[var(--sift-review)] px-3 py-1.5 text-[12.5px] font-medium text-black disabled:opacity-40"
                 >
-                  Keep selected, trash the rest
+                  Move {toTrash.length} to Trash
                 </button>
               </div>
-              <ul className="space-y-1">
+              <ul className="divide-y divide-[var(--sift-border)]">
                 {group.files.map((f) => {
                   const isKeeper = f === keeper
                   return (
-                    <li key={f} className="flex items-center justify-between text-[12.5px] gap-3">
-                      <span
-                        className={isKeeper ? 'text-[var(--sift-text)]' : 'text-[var(--sift-text-muted)]'}
-                        title={f}
+                    <li
+                      key={f}
+                      className={
+                        'flex items-center gap-3 px-4 py-2.5 ' +
+                        (isKeeper ? 'bg-[var(--sift-accent-soft)]' : '')
+                      }
+                    >
+                      <input
+                        type="radio"
+                        name={`keep-${group.hash}`}
+                        id={`${group.hash}:${f}`}
+                        checked={isKeeper}
+                        onChange={() => setKeepers((prev) => ({ ...prev, [group.hash]: f }))}
+                        className="accent-[var(--sift-accent)] shrink-0"
+                      />
+                      <label
+                        htmlFor={`${group.hash}:${f}`}
+                        className="min-w-0 flex-1 cursor-pointer"
                       >
-                        {isKeeper && <span className="text-[var(--sift-accent)] mr-1">Keep ·</span>}
-                        {f}
-                      </span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {!isKeeper && (
-                          <button
-                            onClick={() => setKeepers((prev) => ({ ...prev, [group.hash]: f }))}
-                            className="text-[11px] font-medium text-[var(--sift-accent)] hover:underline"
-                          >
-                            Keep this
-                          </button>
-                        )}
-                        <button
-                          onClick={() => window.api.revealInFinder(f)}
-                          className="text-[11px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+                        <div
+                          className={
+                            'truncate text-[13px] ' +
+                            (isKeeper ? 'text-[var(--sift-text)]' : 'text-[var(--sift-text-muted)]')
+                          }
+                          title={f}
                         >
-                          Reveal
-                        </button>
-                      </div>
+                          {f}
+                        </div>
+                        <div
+                          className={
+                            'text-[11.5px] ' +
+                            (isKeeper
+                              ? 'text-[var(--sift-accent)]'
+                              : 'text-[var(--sift-text-muted)]')
+                          }
+                        >
+                          {isKeeper
+                            ? chosen
+                              ? 'Keep · you chose this'
+                              : 'Keep · oldest'
+                            : 'Moves to Trash'}
+                        </div>
+                      </label>
+                      <button
+                        onClick={() => window.api.revealInFinder(f)}
+                        className="shrink-0 text-[11.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+                      >
+                        Reveal
+                      </button>
                     </li>
                   )
                 })}
               </ul>
-            </div>
+            </fieldset>
           )
         })}
       </div>

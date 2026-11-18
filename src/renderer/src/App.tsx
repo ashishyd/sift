@@ -7,6 +7,7 @@ import FolderTree from './components/FolderTree'
 import AiAppsView from './components/AiAppsView'
 import HiddenSpaceView from './components/HiddenSpaceView'
 import SettingsModal from './components/SettingsModal'
+import { formatBytes } from './lib/format'
 import appIcon from './assets/app-icon.png'
 
 function App(): React.JSX.Element {
@@ -18,6 +19,7 @@ function App(): React.JSX.Element {
   const hasClaudeCli = useSiftStore((s) => s.hasClaudeCli)
   const setHasClaudeCli = useSiftStore((s) => s.setHasClaudeCli)
   const toast = useSiftStore((s) => s.toast)
+  const summary = useSiftStore((s) => s.summary)
   const loadCachedSummary = useSiftStore((s) => s.loadCachedSummary)
 
   useEffect(
@@ -37,63 +39,72 @@ function App(): React.JSX.Element {
   }, [setHasApiKey, setHasClaudeCli, loadCachedSummary])
 
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-[var(--sift-border)] sticky top-0 bg-[var(--sift-bg)]/90 backdrop-blur z-10">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2.5">
-            <img src={appIcon} alt="" className="size-7 rounded-[7px]" />
-            <div className="flex items-baseline gap-2">
-              <span className="text-[15px] font-semibold tracking-tight">Sift</span>
-              <span className="text-[11px] text-[var(--sift-text-muted)]">Know before you clear.</span>
-            </div>
+    <div className="flex min-h-screen">
+      <nav
+        aria-label="Sections"
+        className="sticky top-0 flex h-screen w-[216px] shrink-0 flex-col gap-1 border-r border-[var(--sift-border)] px-3 py-5"
+      >
+        <div className="flex items-center gap-2.5 px-2 pb-5">
+          <img src={appIcon} alt="" className="size-7 rounded-[7px]" />
+          <div className="flex flex-col">
+            <span className="text-[15px] font-semibold tracking-tight">Sift</span>
+            <span className="text-[11px] text-[var(--sift-text-muted)]">
+              Know before you clear.
+            </span>
           </div>
-          <nav className="flex items-center gap-1">
-            {(
-              [
-                ['dashboard', 'Dashboard'],
-                ['explore', 'Explore'],
-                ['duplicates', 'Duplicates'],
-                ['ai-apps', 'AI Apps'],
-                ['hidden', 'Restart space']
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                onClick={() => setActiveView(id)}
-                className={clsx(
-                  'px-3 py-1.5 rounded-lg text-[13px] transition-colors',
-                  activeView === id
-                    ? 'bg-[var(--sift-surface-raised)] text-[var(--sift-text)]'
-                    : 'text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
         </div>
-        <div className="flex items-center gap-3">
-          {hasApiKey ? (
-            <span className="text-[11px] text-[var(--sift-accent)]">Claude connected</span>
-          ) : hasClaudeCli ? (
-            <span className="text-[11px] text-[var(--sift-accent)]">Claude CLI connected</span>
-          ) : null}
+        {(
+          [
+            ['dashboard', 'Overview'],
+            ['explore', 'Explore'],
+            ['duplicates', 'Duplicates'],
+            ['ai-apps', 'AI apps'],
+            ['hidden', 'Restart space']
+          ] as const
+        ).map(([id, label]) => (
           <button
-            onClick={() => setSettingsOpen(true)}
-            className="size-8 rounded-lg border border-[var(--sift-border)] flex items-center justify-center text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
-            title="Settings"
+            key={id}
+            onClick={() => setActiveView(id)}
+            aria-current={activeView === id ? 'page' : undefined}
+            className={clsx(
+              'flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors',
+              activeView === id
+                ? 'bg-[var(--sift-surface-raised)] text-[var(--sift-text)]'
+                : 'text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]'
+            )}
           >
-            ⚙
+            {label}
+            {id === 'dashboard' && summary && summary.reclaimableBytes > 0 && (
+              <span className="text-[11.5px] tabular-nums text-[var(--sift-accent)]">
+                {formatBytes(summary.reclaimableBytes)}
+              </span>
+            )}
           </button>
-        </div>
-      </header>
+        ))}
+        <div className="grow" />
+        {(hasApiKey || hasClaudeCli) && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-[var(--sift-border)] p-2.5 text-[12px]">
+            <span className="size-1.5 rounded-full bg-[var(--sift-accent)]" />
+            {hasApiKey ? 'Claude connected' : 'Claude CLI connected'}
+          </div>
+        )}
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="mt-1.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+        >
+          <span aria-hidden="true">⚙</span>
+          Settings
+        </button>
+      </nav>
 
-      <main className="px-6 py-6 max-w-5xl mx-auto">
-        {activeView === 'dashboard' && <Dashboard />}
-        {activeView === 'explore' && <FolderTree />}
-        {activeView === 'duplicates' && <DuplicatesView />}
-        {activeView === 'ai-apps' && <AiAppsView />}
-        {activeView === 'hidden' && <HiddenSpaceView />}
+      <main className="min-w-0 flex-1 px-8 pt-6">
+        <div className="max-w-5xl">
+          {activeView === 'dashboard' && <Dashboard />}
+          {activeView === 'explore' && <FolderTree />}
+          {activeView === 'duplicates' && <DuplicatesView />}
+          {activeView === 'ai-apps' && <AiAppsView />}
+          {activeView === 'hidden' && <HiddenSpaceView />}
+        </div>
       </main>
 
       <SettingsModal />

@@ -14,7 +14,7 @@ function Section({
   return (
     <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] overflow-hidden">
       <div className="px-4 py-3.5">
-        <h3 className="font-medium text-[15px]">{title}</h3>
+        <h2 className="text-[15px] font-semibold">{title}</h2>
         <p className="text-[12.5px] text-[var(--sift-text-muted)] mt-0.5">{detail}</p>
       </div>
       <div className="border-t border-[var(--sift-border)]">{children}</div>
@@ -46,22 +46,50 @@ export default function HiddenSpaceView(): React.JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-[16px]">Space a restart gives back</h2>
-          <p className="text-[12.5px] text-[var(--sift-text-muted)] mt-0.5 max-w-xl">
-            Restarting your Mac empties swap, temp files and anything deleted but still held open by an
-            app. Reclaim the same space here without rebooting.
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-[16px] font-semibold">Space a restart gives back</h1>
+          <p className="max-w-xl text-[12.5px] leading-relaxed text-[var(--sift-text-muted)]">
+            Restarting empties swap, temp files and anything deleted but still held open by an app.
+            Reclaim the same space here without rebooting.
           </p>
         </div>
         <button
           onClick={run}
           disabled={isScanning}
-          className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-2 text-[13px] font-medium text-black disabled:opacity-50"
+          className="rounded-lg border border-[var(--sift-border)] px-3.5 py-2 text-[12.5px] hover:bg-white/5 disabled:opacity-50"
         >
           {isScanning ? 'Scanning…' : 'Rescan'}
         </button>
-      </div>
+      </header>
+
+      {report && (
+        <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            ['Held open', formatBytes(report.heldDeletedBytes), 'Frees when apps quit'],
+            [
+              'Swap in use',
+              formatBytes(report.swapUsedBytes),
+              `of ${formatBytes(report.swapTotalBytes)}`
+            ],
+            [
+              'Simulators',
+              formatBytes(report.simulatorRuntimes.reduce((n, r) => n + r.sizeBytes, 0)),
+              `${report.simulatorRuntimes.length} runtime(s)`
+            ],
+            ['Snapshots', String(report.snapshots.length), 'Local restore points']
+          ].map(([label, value, note]) => (
+            <div
+              key={label}
+              className="flex flex-col gap-0.5 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] px-4 py-3.5"
+            >
+              <span className="text-[11.5px] text-[var(--sift-text-muted)]">{label}</span>
+              <span className="text-[15px] font-semibold tabular-nums">{value}</span>
+              <span className="text-[11.5px] text-[var(--sift-text-muted)]">{note}</span>
+            </div>
+          ))}
+        </section>
+      )}
 
       {report && (
         <>
@@ -79,7 +107,10 @@ export default function HiddenSpaceView(): React.JSX.Element {
                     <li key={`${f.pid}:${f.path}`} className="flex items-center gap-3 px-4 py-2.5">
                       <div className="min-w-0 flex-1">
                         <div className="text-[13px]">{app ?? f.processName}</div>
-                        <div className="text-[11.5px] text-[var(--sift-text-muted)] truncate" title={f.path}>
+                        <div
+                          className="text-[11.5px] text-[var(--sift-text-muted)] truncate"
+                          title={f.path}
+                        >
                           {f.path}
                         </div>
                       </div>
@@ -184,7 +215,7 @@ export default function HiddenSpaceView(): React.JSX.Element {
 
           <Section
             title="Temporary files & system"
-            detail="Temp files live in the Dashboard under Temporary Files. The sleep image is rewritten by macOS on every sleep and can't be removed."
+            detail="Temp files are on the Overview under Temporary Files. The sleep image is rewritten by macOS on every sleep and can't be removed."
           >
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-[13px] text-[var(--sift-text-muted)]">
@@ -194,7 +225,7 @@ export default function HiddenSpaceView(): React.JSX.Element {
                 onClick={() => setActiveView('dashboard')}
                 className="text-[12.5px] font-medium text-[var(--sift-accent)] hover:underline"
               >
-                Open Dashboard
+                Open Overview
               </button>
             </div>
           </Section>

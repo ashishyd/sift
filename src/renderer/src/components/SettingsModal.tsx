@@ -99,7 +99,7 @@ export default function SettingsModal(): React.JSX.Element | null {
 
   const tabButtonClass = (id: SettingsTab): string =>
     clsx(
-      'flex-1 py-1.5 rounded-md text-[12.5px] font-medium transition-colors',
+      'rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors',
       tab === id
         ? 'bg-[var(--sift-surface-raised)] text-[var(--sift-text)]'
         : 'text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]'
@@ -115,9 +115,7 @@ export default function SettingsModal(): React.JSX.Element | null {
       <input
         type="number"
         value={draft[keyName] as number}
-        onChange={(e) =>
-          setDraft((prev) => ({ ...prev, [keyName]: Number(e.target.value) }))
-        }
+        onChange={(e) => setDraft((prev) => ({ ...prev, [keyName]: Number(e.target.value) }))}
         className="mt-1 w-full rounded-lg border border-[var(--sift-border)] bg-[var(--sift-bg)] px-3 py-1.5 text-[13px] outline-none focus:border-[var(--sift-accent)]"
       />
       <span className="text-[11px] text-[var(--sift-text-muted)] mt-1 block">{hint}</span>
@@ -130,12 +128,19 @@ export default function SettingsModal(): React.JSX.Element | null {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-[500px] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface-raised)] p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        className="flex h-[640px] max-h-[90vh] w-[820px] max-w-[95vw] overflow-hidden rounded-2xl border border-[var(--sift-border)] bg-[var(--sift-bg)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-semibold text-[15px] mb-3.5">Settings</h2>
-
-        <div className="flex gap-1 p-[3px] rounded-[10px] bg-[var(--sift-bg)] mb-4">
+        <nav
+          aria-label="Settings sections"
+          className="flex w-[190px] shrink-0 flex-col gap-1 border-r border-[var(--sift-border)] px-3 py-5"
+        >
+          <h2 id="settings-title" className="mb-3 px-2.5 text-[15px] font-semibold">
+            Settings
+          </h2>
           <button onClick={() => setTab('access')} className={tabButtonClass('access')}>
             Access
           </button>
@@ -143,285 +148,308 @@ export default function SettingsModal(): React.JSX.Element | null {
             Scan
           </button>
           <button onClick={() => setTab('ai')} className={tabButtonClass('ai')}>
-            AI
+            Claude
           </button>
           <button onClick={() => setTab('activity')} className={tabButtonClass('activity')}>
             Activity
           </button>
-        </div>
+        </nav>
 
-        {tab === 'access' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[12.5px] text-[var(--sift-text-muted)]">
-                Sift needs folder access before it can see what&apos;s inside. macOS asks once per
-                folder.
-              </p>
-              <button
-                onClick={refreshPermissions}
-                disabled={isCheckingPermissions}
-                className="text-[12px] text-[var(--sift-accent)] hover:underline disabled:opacity-50 shrink-0"
-              >
-                {isCheckingPermissions ? 'Checking…' : 'Check again'}
-              </button>
-            </div>
-            <div className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] overflow-hidden">
-              {(permissions ?? []).map((p) => (
-                <div key={p.id} className="flex items-center justify-between px-3 py-2">
-                  <span className="text-[13px]">{p.label}</span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-7 py-6">
+            {tab === 'access' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                    Sift needs folder access before it can see what&apos;s inside. macOS asks once
+                    per folder.
+                  </p>
+                  <button
+                    onClick={refreshPermissions}
+                    disabled={isCheckingPermissions}
+                    className="shrink-0 rounded-lg border border-[var(--sift-border)] px-3 py-1.5 text-[12.5px] hover:bg-white/5 disabled:opacity-50"
+                  >
+                    {isCheckingPermissions ? 'Checking…' : 'Check again'}
+                  </button>
+                </div>
+                <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] divide-y divide-[var(--sift-border)] overflow-hidden">
+                  {(permissions ?? []).map((p) => (
+                    <div key={p.id} className="flex items-center justify-between px-3 py-2">
+                      <span className="text-[13px]">{p.label}</span>
+                      <span
+                        className={clsx(
+                          'text-[11px] font-medium px-2 py-0.5 rounded-full',
+                          p.status === 'granted'
+                            ? 'bg-[var(--sift-accent-soft)] text-[var(--sift-safe)]'
+                            : 'bg-[var(--sift-review)]/10 text-[var(--sift-review)]'
+                        )}
+                      >
+                        {p.status === 'granted' ? 'Access granted' : 'Access denied'}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <div>
+                      <span className="text-[13px]">Full Disk Access</span>
+                      <p className="text-[11px] text-[var(--sift-text-muted)]">
+                        Optional — improves cache scan accuracy
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => openPrivacySettings('full-disk-access')}
+                      className="text-[11.5px] font-medium text-[var(--sift-accent)] hover:underline shrink-0"
+                    >
+                      Open Settings
+                    </button>
+                  </div>
+                </div>
+                {permissions?.some((p) => p.status === 'denied') && (
+                  <div
+                    role="status"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[var(--sift-caution)]/30 bg-[var(--sift-caution)]/10 px-3.5 py-2.5 text-[12.5px]"
+                  >
+                    <span>
+                      <span aria-hidden="true" className="text-[var(--sift-caution)]">
+                        ⚠{' '}
+                      </span>
+                      Some folders are denied, so results for them will be incomplete.
+                    </span>
+                    <button
+                      onClick={() => openPrivacySettings('files')}
+                      className="font-medium text-[var(--sift-caution)] hover:underline"
+                    >
+                      Fix in System Settings
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab === 'scan' && (
+              <div className="space-y-4">
+                <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                  Tune what Sift looks for. Changes apply on the next scan.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {numberField('Large file size (MB)', 'largeFileMinMb', 'Minimum file size')}
+                  {numberField('Large file age (days)', 'largeFileMinAgeDays', 'Untouched for…')}
+                  {numberField(
+                    'Old Downloads (days)',
+                    'downloadsMinAgeDays',
+                    'Downloads age filter'
+                  )}
+                  {numberField('Logs age (days)', 'logsMinAgeDays', 'Log / crash age filter')}
+                  {numberField('Mail downloads (days)', 'mailMinAgeDays', 'Mail attachment age')}
+                  {numberField('Messages (days)', 'messagesMinAgeDays', 'Attachment age')}
+                  {numberField('Xcode archives (days)', 'archivesMinAgeDays', 'Archive age')}
+                  {numberField('Background scan (hours)', 'backgroundScanHours', 'Menu bar rescan')}
+                </div>
+
+                <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3.5 space-y-2">
+                  <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.lowSpaceAlertsEnabled}
+                      onChange={() =>
+                        setDraft({ ...draft, lowSpaceAlertsEnabled: !draft.lowSpaceAlertsEnabled })
+                      }
+                      className="accent-[var(--sift-accent)]"
+                    />
+                    Notify me when free space runs low
+                  </label>
+                  {draft.lowSpaceAlertsEnabled && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {numberField('Alert below (GB free)', 'lowSpaceThresholdGb', 'Startup disk')}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
+                    Categories
+                  </h3>
+                  <div className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] max-h-[180px] overflow-y-auto">
+                    {(categoryDefs ?? []).map((c) => {
+                      const enabled = !draft.disabledCategoryIds.includes(c.id)
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={() => toggleCategory(c.id)}
+                            className="accent-[var(--sift-accent)]"
+                          />
+                          <span className="flex-1">{c.label}</span>
+                          <span className="text-[11px] text-[var(--sift-text-muted)]">
+                            {c.risk}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setDraft(DEFAULT_SCAN_PREFERENCES)}
+                    className="text-[12.5px] text-[var(--sift-text-muted)] hover:underline"
+                  >
+                    Reset defaults
+                  </button>
+                  <button
+                    onClick={savePrefs}
+                    disabled={savingPrefs}
+                    className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-1.5 text-[13px] font-medium text-black disabled:opacity-40"
+                  >
+                    {savingPrefs ? 'Saving…' : 'Save scan settings'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {tab === 'ai' && (
+              <div className="space-y-3">
+                <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                  Claude turns a scan into plain-English recommendations. Only category labels,
+                  sizes and a few example filenames are sent — never file contents.
+                </p>
+
+                <div className="flex items-center justify-between rounded-lg border border-[var(--sift-border)] px-3 py-2">
+                  <div>
+                    <span className="text-[13px]">Claude Code CLI</span>
+                    <p className="text-[11px] text-[var(--sift-text-muted)]">
+                      {hasClaudeCli
+                        ? 'Detected and ready — no API key needed.'
+                        : 'Not found on this Mac. Install it and Sift will use your existing login.'}
+                    </p>
+                  </div>
                   <span
                     className={clsx(
-                      'text-[11px] font-medium px-2 py-0.5 rounded-full',
-                      p.status === 'granted'
+                      'text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0',
+                      hasClaudeCli
                         ? 'bg-[var(--sift-accent-soft)] text-[var(--sift-safe)]'
-                        : 'bg-[var(--sift-review)]/10 text-[var(--sift-review)]'
+                        : 'bg-white/5 text-[var(--sift-text-muted)]'
                     )}
                   >
-                    {p.status === 'granted' ? 'Access granted' : 'Access denied'}
+                    {hasClaudeCli ? 'Ready' : 'Not found'}
                   </span>
                 </div>
-              ))}
-              <div className="flex items-center justify-between px-3 py-2">
+
                 <div>
-                  <span className="text-[13px]">Full Disk Access</span>
-                  <p className="text-[11px] text-[var(--sift-text-muted)]">
-                    Optional — improves cache scan accuracy
+                  <label className="block text-[12px] font-medium text-[var(--sift-text-muted)] mb-1.5">
+                    Anthropic API key{' '}
+                    <span className="text-[var(--sift-text-muted)] font-normal">
+                      (optional — used instead of the CLI if set)
+                    </span>
+                  </label>
+                  <input
+                    type="password"
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    placeholder={hasApiKey ? '•••••••••••••••••••• (key set)' : 'sk-ant-...'}
+                    className="w-full rounded-lg border border-[var(--sift-border)] bg-[var(--sift-bg)] px-3 py-2 text-[13px] outline-none focus:border-[var(--sift-accent)]"
+                  />
+                  <p className="text-[11px] text-[var(--sift-text-muted)] mt-1.5">
+                    Encrypted on disk with macOS Keychain.
                   </p>
                 </div>
-                <button
-                  onClick={() => openPrivacySettings('full-disk-access')}
-                  className="text-[11.5px] font-medium text-[var(--sift-accent)] hover:underline shrink-0"
-                >
-                  Open Settings
-                </button>
+
+                <div className="flex items-center justify-between">
+                  {hasApiKey ? (
+                    <button
+                      onClick={clear}
+                      className="text-[12.5px] text-[var(--sift-review)] hover:underline"
+                    >
+                      Remove saved key
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    onClick={save}
+                    disabled={saving || !key.trim()}
+                    className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-1.5 text-[13px] font-medium text-black disabled:opacity-40 ml-auto"
+                  >
+                    {saving ? 'Saving…' : 'Save key'}
+                  </button>
+                </div>
               </div>
-            </div>
-            {permissions?.some((p) => p.status === 'denied') && (
-              <button
-                onClick={() => openPrivacySettings('files')}
-                className="text-[12px] font-medium text-[var(--sift-review)] hover:underline text-left"
-              >
-                Fix denied folders in System Settings →
-              </button>
+            )}
+
+            {tab === 'activity' && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
+                    Clear history
+                  </h3>
+                  <p className="text-[12.5px] text-[var(--sift-text-muted)] mb-2">
+                    Lifetime reclaimed:{' '}
+                    <span className="text-[var(--sift-text)] font-medium">
+                      {formatBytes((clearHistory ?? []).reduce((s, h) => s + h.freedBytes, 0))}
+                    </span>
+                  </p>
+                  {clearHistory && clearHistory.length > 0 ? (
+                    <ul className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] max-h-[150px] overflow-y-auto">
+                      {clearHistory.slice(0, 10).map((h) => (
+                        <li
+                          key={h.date}
+                          className="flex items-center justify-between px-3 py-1.5 text-[12.5px]"
+                        >
+                          <span className="text-[var(--sift-text-muted)]">
+                            {formatRelativeDate(h.date)} · {h.count} item(s)
+                          </span>
+                          <span className="font-medium">{formatBytes(h.freedBytes)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                      Nothing cleared yet.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
+                    Ignored items ({ignoredPaths?.length ?? 0})
+                  </h3>
+                  {ignoredPaths && ignoredPaths.length > 0 ? (
+                    <ul className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] max-h-[150px] overflow-y-auto">
+                      {ignoredPaths.map((p) => (
+                        <li key={p} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                          <span className="text-[12.5px] truncate" title={p}>
+                            {p.split('/').pop()}
+                          </span>
+                          <button
+                            onClick={() => unignorePath(p)}
+                            className="text-[11.5px] font-medium text-[var(--sift-accent)] hover:underline shrink-0"
+                          >
+                            Un-ignore
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                      Items you mark &quot;Ignore&quot; won&apos;t resurface on future scans — none
+                      yet.
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-        )}
-
-        {tab === 'scan' && (
-          <div className="space-y-4">
-            <p className="text-[12.5px] text-[var(--sift-text-muted)]">
-              Tune what Sift looks for. Changes apply on the next scan.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {numberField('Large file size (MB)', 'largeFileMinMb', 'Minimum file size')}
-              {numberField('Large file age (days)', 'largeFileMinAgeDays', 'Untouched for…')}
-              {numberField('Old Downloads (days)', 'downloadsMinAgeDays', 'Downloads age filter')}
-              {numberField('Logs age (days)', 'logsMinAgeDays', 'Log / crash age filter')}
-              {numberField('Mail downloads (days)', 'mailMinAgeDays', 'Mail attachment age')}
-              {numberField('Messages (days)', 'messagesMinAgeDays', 'Attachment age')}
-              {numberField('Xcode archives (days)', 'archivesMinAgeDays', 'Archive age')}
-              {numberField('Background scan (hours)', 'backgroundScanHours', 'Menu bar rescan')}
-            </div>
-
-            <div className="rounded-lg border border-[var(--sift-border)] p-3 space-y-2">
-              <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={draft.lowSpaceAlertsEnabled}
-                  onChange={() =>
-                    setDraft({ ...draft, lowSpaceAlertsEnabled: !draft.lowSpaceAlertsEnabled })
-                  }
-                  className="accent-[var(--sift-accent)]"
-                />
-                Notify me when free space runs low
-              </label>
-              {draft.lowSpaceAlertsEnabled && (
-                <div className="grid grid-cols-2 gap-3">
-                  {numberField('Alert below (GB free)', 'lowSpaceThresholdGb', 'Startup disk')}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
-                Categories
-              </h3>
-              <div className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] max-h-[180px] overflow-y-auto">
-                {(categoryDefs ?? []).map((c) => {
-                  const enabled = !draft.disabledCategoryIds.includes(c.id)
-                  return (
-                    <label
-                      key={c.id}
-                      className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={enabled}
-                        onChange={() => toggleCategory(c.id)}
-                        className="accent-[var(--sift-accent)]"
-                      />
-                      <span className="flex-1">{c.label}</span>
-                      <span className="text-[11px] text-[var(--sift-text-muted)]">{c.risk}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setDraft(DEFAULT_SCAN_PREFERENCES)}
-                className="text-[12.5px] text-[var(--sift-text-muted)] hover:underline"
-              >
-                Reset defaults
-              </button>
-              <button
-                onClick={savePrefs}
-                disabled={savingPrefs}
-                className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-1.5 text-[13px] font-medium text-black disabled:opacity-40"
-              >
-                {savingPrefs ? 'Saving…' : 'Save scan settings'}
-              </button>
-            </div>
+          <div className="flex justify-end border-t border-[var(--sift-border)] px-7 py-3.5">
+            <button
+              onClick={() => setOpen(false)}
+              className="rounded-lg border border-[var(--sift-border)] px-4 py-2 text-[13px] hover:bg-white/5"
+            >
+              Close
+            </button>
           </div>
-        )}
-
-        {tab === 'ai' && (
-          <div className="space-y-3">
-            <p className="text-[12.5px] text-[var(--sift-text-muted)]">
-              Claude turns a scan into plain-English recommendations. Only category labels, sizes
-              and a few example filenames are sent — never file contents.
-            </p>
-
-            <div className="flex items-center justify-between rounded-lg border border-[var(--sift-border)] px-3 py-2">
-              <div>
-                <span className="text-[13px]">Claude Code CLI</span>
-                <p className="text-[11px] text-[var(--sift-text-muted)]">
-                  {hasClaudeCli
-                    ? 'Detected and ready — no API key needed.'
-                    : 'Not found on this Mac. Install it and Sift will use your existing login.'}
-                </p>
-              </div>
-              <span
-                className={clsx(
-                  'text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0',
-                  hasClaudeCli
-                    ? 'bg-[var(--sift-accent-soft)] text-[var(--sift-safe)]'
-                    : 'bg-white/5 text-[var(--sift-text-muted)]'
-                )}
-              >
-                {hasClaudeCli ? 'Ready' : 'Not found'}
-              </span>
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-[var(--sift-text-muted)] mb-1.5">
-                Anthropic API key{' '}
-                <span className="text-[var(--sift-text-muted)] font-normal">
-                  (optional — used instead of the CLI if set)
-                </span>
-              </label>
-              <input
-                type="password"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                placeholder={hasApiKey ? '•••••••••••••••••••• (key set)' : 'sk-ant-...'}
-                className="w-full rounded-lg border border-[var(--sift-border)] bg-[var(--sift-bg)] px-3 py-2 text-[13px] outline-none focus:border-[var(--sift-accent)]"
-              />
-              <p className="text-[11px] text-[var(--sift-text-muted)] mt-1.5">
-                Encrypted on disk with macOS Keychain.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between">
-              {hasApiKey ? (
-                <button
-                  onClick={clear}
-                  className="text-[12.5px] text-[var(--sift-review)] hover:underline"
-                >
-                  Remove saved key
-                </button>
-              ) : (
-                <span />
-              )}
-              <button
-                onClick={save}
-                disabled={saving || !key.trim()}
-                className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-1.5 text-[13px] font-medium text-black disabled:opacity-40 ml-auto"
-              >
-                {saving ? 'Saving…' : 'Save key'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {tab === 'activity' && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
-                Clear history
-              </h3>
-              <p className="text-[12.5px] text-[var(--sift-text-muted)] mb-2">
-                Lifetime reclaimed:{' '}
-                <span className="text-[var(--sift-text)] font-medium">
-                  {formatBytes((clearHistory ?? []).reduce((s, h) => s + h.freedBytes, 0))}
-                </span>
-              </p>
-              {clearHistory && clearHistory.length > 0 ? (
-                <ul className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] max-h-[150px] overflow-y-auto">
-                  {clearHistory.slice(0, 10).map((h) => (
-                    <li
-                      key={h.date}
-                      className="flex items-center justify-between px-3 py-1.5 text-[12.5px]"
-                    >
-                      <span className="text-[var(--sift-text-muted)]">
-                        {formatRelativeDate(h.date)} · {h.count} item(s)
-                      </span>
-                      <span className="font-medium">{formatBytes(h.freedBytes)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-[12.5px] text-[var(--sift-text-muted)]">Nothing cleared yet.</p>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
-                Ignored items ({ignoredPaths?.length ?? 0})
-              </h3>
-              {ignoredPaths && ignoredPaths.length > 0 ? (
-                <ul className="rounded-lg border border-[var(--sift-border)] divide-y divide-[var(--sift-border)] max-h-[150px] overflow-y-auto">
-                  {ignoredPaths.map((p) => (
-                    <li key={p} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                      <span className="text-[12.5px] truncate" title={p}>
-                        {p.split('/').pop()}
-                      </span>
-                      <button
-                        onClick={() => unignorePath(p)}
-                        className="text-[11.5px] font-medium text-[var(--sift-accent)] hover:underline shrink-0"
-                      >
-                        Un-ignore
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-[12.5px] text-[var(--sift-text-muted)]">
-                  Items you mark &quot;Ignore&quot; won&apos;t resurface on future scans — none yet.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="flex justify-end mt-4">
-          <button
-            onClick={() => setOpen(false)}
-            className="rounded-lg px-3.5 py-1.5 text-[13px] text-[var(--sift-text-muted)] hover:bg-white/5"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

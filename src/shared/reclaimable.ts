@@ -1,4 +1,4 @@
-import type { CategoryResult } from './types'
+import type { CategoryResult, RiskLevel } from './types'
 
 /**
  * Sum reclaimable space across categories, excluding Trash (already deleted) and
@@ -91,4 +91,14 @@ export function dedupeOverlappingCategoryPaths(results: CategoryResult[]): Categ
   }
 
   return results.map((c) => byId.get(c.id) ?? c)
+}
+
+/** Bytes per risk level, from each category's uncapped total. Trash and missing categories are skipped. */
+export function riskTotals(categories: CategoryResult[]): Record<RiskLevel, number> {
+  const totals: Record<RiskLevel, number> = { safe: 0, caution: 0, review: 0 }
+  for (const c of categories) {
+    if (c.id === 'trash' || c.missing) continue
+    totals[c.risk] += c.totalSizeBytes
+  }
+  return totals
 }

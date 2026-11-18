@@ -35,57 +35,97 @@ export default function AiAppsView(): React.JSX.Element {
       .filter((c) => picked.has(c.path))
       .reduce((s, c) => s + c.sizeBytes, 0) ?? 0
 
+  const keepBytes = report ? Math.max(report.totalBytes - report.clearableBytes, 0) : 0
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-[16px]">AI apps</h2>
-          <p className="text-[12.5px] text-[var(--sift-text-muted)] mt-0.5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-[16px] font-semibold">AI apps</h1>
+          <p className="text-[12.5px] text-[var(--sift-text-muted)]">
             What Claude, Cursor and ChatGPT keep on disk, and how much of it can be cleared.
           </p>
         </div>
         <button
           onClick={runAiAppsScan}
           disabled={isScanning}
-          className="rounded-lg bg-[var(--sift-accent)] px-3.5 py-2 text-[13px] font-medium text-black disabled:opacity-50"
+          className="rounded-lg border border-[var(--sift-border)] px-3.5 py-2 text-[12.5px] hover:bg-white/5 disabled:opacity-50"
         >
           {isScanning ? 'Scanning…' : 'Rescan'}
         </button>
-      </div>
+      </header>
 
       {report && (
-        <p className="text-[13px] text-[var(--sift-text-muted)]">
-          {formatBytes(report.totalBytes)} used in total ·{' '}
-          <span className="text-[var(--sift-accent)] font-medium">
-            {formatBytes(report.clearableBytes)}
-          </span>{' '}
-          can be cleared. Cleared items go to the Trash.
-        </p>
+        <section
+          aria-labelledby="ai-sum"
+          className="space-y-3.5 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-5"
+        >
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="space-y-1">
+              <h2 id="ai-sum" className="text-[12.5px] text-[var(--sift-text-muted)]">
+                Can be cleared
+              </h2>
+              <div className="flex items-baseline gap-2.5">
+                <span className="text-[32px] font-semibold tracking-tight tabular-nums">
+                  {formatBytes(report.clearableBytes)}
+                </span>
+                <span className="text-[13px] text-[var(--sift-text-muted)] tabular-nums">
+                  of {formatBytes(report.totalBytes)} used in total
+                </span>
+              </div>
+            </div>
+            <span className="text-[11.5px] text-[var(--sift-text-muted)]">
+              Cleared items go to the Trash. Chats, logins and settings are never offered.
+            </span>
+          </div>
+          <div
+            role="img"
+            aria-label={`${formatBytes(report.clearableBytes)} clearable, ${formatBytes(keepBytes)} to keep`}
+            className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-[#1e222c]"
+          >
+            <div style={{ flex: `${report.clearableBytes} 1 0`, background: 'var(--sift-safe)' }} />
+            <div style={{ flex: `${keepBytes} 1 0`, background: '#3a4152' }} />
+          </div>
+          <div className="flex gap-5 text-[11.5px] text-[var(--sift-text-muted)]">
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-sm bg-[var(--sift-safe)]" />
+              Clearable
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-sm bg-[#3a4152]" />
+              Keep
+            </span>
+          </div>
+        </section>
       )}
 
       {report?.apps.map((app) => (
-        <div
+        <section
           key={app.id}
-          className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] overflow-hidden"
+          aria-labelledby={`app-${app.id}`}
+          className="overflow-hidden rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)]"
         >
-          <div className="flex items-center justify-between px-4 py-3.5">
-            <div>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
+            <div className="space-y-0.5">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-[15px]">{app.label}</span>
+                <h2 id={`app-${app.id}`} className="text-[15px] font-semibold">
+                  {app.label}
+                </h2>
                 {app.running && (
-                  <span className="text-[11px] text-[var(--sift-caution)]">running</span>
+                  <span className="rounded-full bg-[var(--sift-caution)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--sift-caution)]">
+                    Running
+                  </span>
                 )}
               </div>
-              <p className="text-[12.5px] text-[var(--sift-text-muted)] mt-0.5">
-                {formatBytes(app.totalBytes)} total ·{' '}
-                {formatBytes(app.clearableBytes)} clearable
+              <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                {formatBytes(app.totalBytes)} total · {formatBytes(app.clearableBytes)} clearable
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {app.running && app.runningProcessName && (
                 <button
                   onClick={() => quitApp(app.runningProcessName!)}
-                  className="text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+                  className="px-3 py-1.5 text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
                   title="Quit first so caches aren't rebuilt while you clear them"
                 >
                   Quit {app.runningProcessName}
@@ -94,47 +134,62 @@ export default function AiAppsView(): React.JSX.Element {
               <button
                 disabled={app.clearableBytes === 0}
                 onClick={() =>
-                  clear(app.components.filter((c) => c.clearable && c.risk === 'safe').map((c) => c.path))
+                  clear(
+                    app.components
+                      .filter((c) => c.clearable && c.risk === 'safe')
+                      .map((c) => c.path)
+                  )
                 }
-                className="rounded-lg border border-[var(--sift-border)] px-3 py-1.5 text-[12.5px] hover:bg-white/5 disabled:opacity-40"
+                className="rounded-lg bg-[var(--sift-accent-soft)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--sift-accent)] disabled:opacity-40"
               >
                 Clear safe items
               </button>
             </div>
           </div>
           {app.components.length === 0 ? (
-            <p className="px-4 py-3 text-[12.5px] text-[var(--sift-text-muted)] border-t border-[var(--sift-border)]">
+            <p className="border-t border-[var(--sift-border)] px-4 py-3 text-[12.5px] text-[var(--sift-text-muted)]">
               Nothing found on disk.
             </p>
           ) : (
-            <ul className="border-t border-[var(--sift-border)] divide-y divide-[var(--sift-border)]">
+            <ul className="divide-y divide-[var(--sift-border)] border-t border-[var(--sift-border)]">
               {app.components.map((c) => (
                 <li key={c.path} className="flex items-center gap-3 px-4 py-2.5">
                   <input
                     type="checkbox"
+                    id={`pick-${c.path}`}
                     disabled={!c.clearable}
                     checked={picked.has(c.path)}
                     onChange={() => toggle(c.path)}
                     className="accent-[var(--sift-accent)] shrink-0"
                   />
-                  <div className="min-w-0 flex-1">
+                  <label htmlFor={`pick-${c.path}`} className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] truncate">{c.label}</span>
+                      <span
+                        className={
+                          'truncate text-[13px] ' +
+                          (c.clearable ? '' : 'text-[var(--sift-text-muted)]')
+                        }
+                      >
+                        {c.label}
+                      </span>
                       <RiskBadge risk={c.risk} />
                       {!c.clearable && (
-                        <span className="text-[11px] text-[var(--sift-text-muted)]">keep</span>
+                        <span className="text-[11px] text-[var(--sift-text-muted)]">Keep</span>
                       )}
                     </div>
-                    <p className="text-[11.5px] text-[var(--sift-text-muted)] truncate" title={c.description}>
+                    <p
+                      className="truncate text-[11.5px] text-[var(--sift-text-muted)]"
+                      title={c.description}
+                    >
                       {c.description}
                     </p>
-                  </div>
-                  <span className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)] shrink-0">
+                  </label>
+                  <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--sift-text-muted)]">
                     {formatBytes(c.sizeBytes)}
                   </span>
                   <button
                     onClick={() => window.api.revealInFinder(c.path)}
-                    className="text-[11.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)] shrink-0"
+                    className="shrink-0 text-[11.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
                   >
                     Reveal
                   </button>
@@ -142,20 +197,38 @@ export default function AiAppsView(): React.JSX.Element {
               ))}
             </ul>
           )}
-        </div>
+        </section>
       ))}
 
       {picked.size > 0 && (
-        <div className="sticky bottom-4 rounded-xl border border-[var(--sift-review)]/30 bg-[var(--sift-surface-raised)] p-3.5 flex items-center justify-between">
-          <p className="text-[13px]">
-            {picked.size} item(s) · {formatBytes(pickedBytes)} selected
-          </p>
-          <button
-            onClick={() => clear(Array.from(picked))}
-            className="rounded-lg bg-[var(--sift-review)] px-3 py-1.5 text-[12.5px] font-medium text-black"
-          >
-            Move to Trash
-          </button>
+        <div
+          role="region"
+          aria-label="Selection"
+          className="sticky bottom-0 -mx-8 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sift-border)] bg-[var(--sift-surface)]/95 px-8 py-3 backdrop-blur"
+        >
+          <span className="text-[13px]">
+            <strong className="font-semibold tabular-nums">
+              {picked.size} item(s) · {formatBytes(pickedBytes)}
+            </strong>
+            <span className="text-[var(--sift-text-muted)]">
+              {' '}
+              selected · moves to Trash, recoverable
+            </span>
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPicked(new Set())}
+              className="rounded-lg px-3 py-2 text-[12.5px] text-[var(--sift-text-muted)] hover:bg-white/5"
+            >
+              Deselect
+            </button>
+            <button
+              onClick={() => clear(Array.from(picked))}
+              className="rounded-lg bg-[var(--sift-review)] px-4 py-2 text-[12.5px] font-medium text-black"
+            >
+              Move to Trash
+            </button>
+          </div>
         </div>
       )}
     </div>
