@@ -1,9 +1,13 @@
 import { Notification, type BrowserWindow } from 'electron'
-import { listVolumes } from './scanner'
+import { listRootVolume } from './scanner'
 import { getScanPreferences } from './config'
 import { getLastScanSummary } from './tray'
+import { requestAutoScan } from './autoScan'
+import type { ScanPreferences } from '../shared/types'
 
-const CHECK_INTERVAL_MS = 5 * 60 * 1000
+/** Poll quickly while someone can see the window; a closed window only needs drop detection. */
+const POLL_VISIBLE_MS = 60 * 1000
+const POLL_HIDDEN_MS = 5 * 60 * 1000
 const GB = 1024 ** 3
 /** While space stays low, remind at most this often. */
 const REMIND_AFTER_MS = 24 * 60 * 60 * 1000
@@ -30,16 +34,12 @@ export function evaluateAlert(
 }
 
 let state: AlertState = { armed: true, lastAlertAt: null }
-let timer: ReturnType<typeof setInterval> | null = null
+let timer: ReturnType<typeof setTimeout> | null = null
+let polling = false
 let getWindow: () => BrowserWindow | null = () => null
+let peekWindow: () => BrowserWindow | null = () => null
 
-export async function checkSpaceNow(): Promise<void> {
-  const prefs = await getScanPreferences()
-  if (!prefs.lowSpaceAlertsEnabled || !Notification.isSupported()) return
-
-  const { free } = await listVolumes()
-  if (free <= 0) return
-
+async function maybeAlert(free: number, prefs: ScanPreferences): Promise<void> {
   const { alert, next } = evaluateAlert(free, prefs.lowSpaceThresholdGb * GB, state, Date.now())
   state = next
   if (!alert) return
@@ -63,17 +63,43 @@ export async function checkSpaceNow(): Promise<void> {
     if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send)
     else send()
   })
+  // Show now with the cached figure; the rescan below takes minutes.
   n.show()
+  void requestAutoScan('low-space', free)
 }
 
-export function startSpaceMonitor(windowGetter: () => BrowserWindow | null): void {
+export async function checkSpaceNow(): Promise<void> {
+  const { free } = await listRootVolume()
+  if (free <= 0) return
+
+  const prefs = await getScanPreferences()
+  if (prefs.lowSpaceAlertsEnabled && Notification.isSupported()) await maybeAlert(free, prefs)
+  void requestAutoScan('space-drop', free)
+}
+
+/** `windowGetter` may create the window (notification click); `peek` must not. */
+export function startSpaceMonitor(
+  windowGetter: () => BrowserWindow | null,
+  peek: () => BrowserWindow | null
+): void {
   getWindow = windowGetter
-  if (timer) clearInterval(timer)
+  peekWindow = peek
+  if (timer) clearTimeout(timer)
   const tick = (): void => {
-    checkSpaceNow().catch(() => {
-      // best-effort; a failed df must never disturb the app
-    })
+    // run() has no timeout, so a stuck df must not stack up behind the next tick
+    if (!polling) {
+      polling = true
+      checkSpaceNow()
+        .catch(() => {
+          // best-effort; a failed df must never disturb the app
+        })
+        .finally(() => {
+          polling = false
+        })
+    }
+    const win = peekWindow()
+    const visible = !!win && !win.isDestroyed() && win.isVisible()
+    timer = setTimeout(tick, visible ? POLL_VISIBLE_MS : POLL_HIDDEN_MS)
   }
-  timer = setInterval(tick, CHECK_INTERVAL_MS)
   tick()
 }

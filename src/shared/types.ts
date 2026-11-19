@@ -127,6 +127,10 @@ export interface ScanPreferences {
   lowSpaceAlertsEnabled: boolean
   /** Alert when free space on the startup disk drops below this many GB. */
   lowSpaceThresholdGb: number
+  /** Rescan on launch, wake, focus and free-space drops without being asked. */
+  autoScanEnabled: boolean
+  /** Rescan when free space falls this many GB below what the last scan saw. */
+  autoScanDropGb: number
   disabledCategoryIds: string[]
 }
 

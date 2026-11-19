@@ -2,7 +2,8 @@ import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { listFolder, requestScanCancel, runFullScan, ScanCancelledError } from './scanner'
+import { listFolder, requestScanCancel } from './scanner'
+import { runAndStoreScan, requestAutoScan, startAutoScan } from './autoScan'
 import { findDuplicates } from './duplicates'
 import { scanAiApps } from './aiApps'
 import { scanHiddenSpace, quitApp, deleteSnapshots, deleteSimulatorRuntime } from './hiddenSpace'
@@ -18,7 +19,6 @@ import {
   getClearHistory,
   appendClearHistory,
   saveLastScan,
-  appendScanSnapshot,
   getScanHistory,
   loadLastScan,
   pruneLastScan,
@@ -100,35 +100,23 @@ app.whenReady().then(() => {
   ensureWindow()
 
   if (process.platform === 'darwin') {
-    trayRef = createTray(ensureWindow)
-    startSpaceMonitor(ensureWindow)
+    trayRef = createTray(ensureWindow, {
+      scanNow: async () => {
+        try {
+          await runAndStoreScan()
+        } catch {
+          // best-effort from the menu bar
+        }
+      },
+      periodic: () => void requestAutoScan('periodic')
+    })
+    startAutoScan(() => mainWindow)
+    startSpaceMonitor(ensureWindow, () => mainWindow)
   }
 
   ipcMain.handle('sift:getLastScanSummary', async () => getLastScanSummary())
 
-  ipcMain.handle('sift:scan', async (event) => {
-    const ignored = await getIgnoredPaths()
-    const prefs = await getScanPreferences()
-    try {
-      const summary = await runFullScan(
-        (label, done, total) => {
-          // The window may be closed (and destroyed) mid-scan; the scan itself keeps going.
-          if (!event.sender.isDestroyed()) event.sender.send('sift:scan-progress', { label, done, total })
-        },
-        ignored,
-        prefs
-      )
-      setLastScanSummary(summary)
-      await saveLastScan(summary)
-      await appendScanSnapshot(summary)
-      return summary
-    } catch (err) {
-      if (err instanceof ScanCancelledError) {
-        throw err
-      }
-      throw err
-    }
-  })
+  ipcMain.handle('sift:scan', async () => runAndStoreScan())
 
   ipcMain.handle('sift:cancelScan', async () => {
     requestScanCancel()

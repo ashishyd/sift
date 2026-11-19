@@ -17,6 +17,12 @@ import type {
 
 type PrivacyPane = 'files' | 'full-disk-access'
 
+function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
+  const listener = (_event: unknown, payload: T): void => cb(payload)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
 const api = {
   scan: (onProgress: (p: { label: string; done: number; total: number }) => void): Promise<ScanSummary> => {
     const listener = (_event: unknown, payload: { label: string; done: number; total: number }): void =>
@@ -67,6 +73,12 @@ const api = {
     ipcRenderer.on('sift:navigate', listener)
     return () => ipcRenderer.removeListener('sift:navigate', listener)
   },
+  onScanProgress: (cb: (p: { label: string; done: number; total: number }) => void): (() => void) =>
+    subscribe('sift:scan-progress', cb),
+  onScanState: (cb: (running: boolean) => void): (() => void) =>
+    subscribe<{ running: boolean }>('sift:scan-state', (s) => cb(s.running)),
+  onScanUpdated: (cb: (summary: ScanSummary) => void): (() => void) =>
+    subscribe('sift:scan-updated', cb),
   getCategoryDefs: (): Promise<Array<{ id: string; label: string; risk: RiskLevel }>> =>
     ipcRenderer.invoke('sift:getCategoryDefs')
 }

@@ -26,6 +26,10 @@ interface ScanProgress {
 interface SiftState {
   summary: ScanSummary | null
   isScanning: boolean
+  /** A scan Sift started on its own (launch, wake, focus, free-space drop); the UI keeps showing the summary. */
+  autoScanning: boolean
+  /** A finished automatic scan held back while items are selected, so rows don't jump under the user. */
+  pendingSummary: ScanSummary | null
   progress: ScanProgress | null
   scanLog: string[]
   selected: Set<string>
@@ -68,6 +72,10 @@ interface SiftState {
   selectAllInCategory: (paths: string[]) => void
   runScan: () => Promise<void>
   cancelScan: () => Promise<void>
+  onAutoScanProgress: (p: ScanProgress) => void
+  onAutoScanState: (running: boolean) => void
+  onAutoScanUpdated: (summary: ScanSummary) => void
+  applyPendingSummary: () => void
   runDuplicateScan: () => Promise<void>
   runAiSuggestion: () => Promise<void>
   trashSelected: () => Promise<void>
@@ -107,6 +115,8 @@ function pruneDuplicates(
 export const useSiftStore = create<SiftState>((set, get) => ({
   summary: null,
   isScanning: false,
+  autoScanning: false,
+  pendingSummary: null,
   progress: null,
   scanLog: [],
   selected: new Set(),
@@ -221,6 +231,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
       aiSuggestion: null,
       aiChat: [],
       selected: new Set(),
+      pendingSummary: null,
       folderCache: {}
     })
     try {
@@ -244,6 +255,41 @@ export const useSiftStore = create<SiftState>((set, get) => ({
       }
       get().showToast(message)
     }
+  },
+
+  onAutoScanProgress: (p): void => {
+    // A scan this window started reports through runScan's own listener.
+    if (get().isScanning) return
+    set({ autoScanning: true, progress: p })
+  },
+
+  onAutoScanState: (running): void => {
+    if (running) {
+      if (!get().isScanning) set({ autoScanning: true })
+      return
+    }
+    set(get().isScanning ? { autoScanning: false } : { autoScanning: false, progress: null })
+  },
+
+  onAutoScanUpdated: (summary): void => {
+    if (get().selected.size > 0) {
+      set({ pendingSummary: summary })
+      return
+    }
+    set({ summary, pendingSummary: null })
+    get().refreshScanHistory()
+  },
+
+  applyPendingSummary: (): void => {
+    const { pendingSummary, selected } = get()
+    if (!pendingSummary) return
+    const present = new Set(pendingSummary.categories.flatMap((c) => c.items.map((i) => i.path)))
+    set({
+      summary: pendingSummary,
+      pendingSummary: null,
+      selected: new Set([...selected].filter((p) => present.has(p)))
+    })
+    get().refreshScanHistory()
   },
 
   cancelScan: async (): Promise<void> => {
@@ -318,6 +364,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
 
       if (!state.summary) {
         return {
+          pendingSummary: null,
           duplicates: pruneDuplicates(state.duplicates, trashedSet),
           folderCache: nextFolderCache,
           selected: new Set([...state.selected].filter((p) => !trashedSet.has(p)))
@@ -347,6 +394,8 @@ export const useSiftStore = create<SiftState>((set, get) => ({
           reclaimableBytes: computeReclaimableBytes(categories)
         },
         selected: nextSelected,
+        // a held scan predates this trash; applying it later would bring trashed items back
+        pendingSummary: null,
         duplicates: pruneDuplicates(state.duplicates, trashedSet),
         folderCache: nextFolderCache
       }

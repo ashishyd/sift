@@ -264,6 +264,33 @@ export default function SettingsModal(): React.JSX.Element | null {
                   )}
                 </div>
 
+                <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3.5 space-y-2">
+                  <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.autoScanEnabled}
+                      onChange={() =>
+                        setDraft({ ...draft, autoScanEnabled: !draft.autoScanEnabled })
+                      }
+                      className="accent-[var(--sift-accent)]"
+                    />
+                    Rescan automatically when things change
+                  </label>
+                  <p className="text-[12px] text-[var(--sift-text-muted)]">
+                    On launch, after wake, when you return to Sift and when free space drops.
+                    Skipped on battery.
+                  </p>
+                  {draft.autoScanEnabled && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {numberField(
+                        'Rescan after free space drops (GB)',
+                        'autoScanDropGb',
+                        'Since the last scan'
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <h3 className="text-[12px] font-medium text-[var(--sift-text-muted)] uppercase tracking-wide mb-1.5">
                     Categories

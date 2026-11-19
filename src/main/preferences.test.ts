@@ -56,4 +56,17 @@ describe('low-space prefs', () => {
     expect(d.lowSpaceThresholdGb).toBe(20)
     expect(normalizeScanPreferences({ lowSpaceThresholdGb: 0 }).lowSpaceThresholdGb).toBe(1)
   })
+
+  it('auto-scan defaults on at 5 GB, fills old configs, and clamps', () => {
+    const d = normalizeScanPreferences({ backgroundScanHours: 4 })
+    expect(d.autoScanEnabled).toBe(true)
+    expect(d.autoScanDropGb).toBe(5)
+    expect(normalizeScanPreferences({ autoScanDropGb: 0 }).autoScanDropGb).toBe(1)
+    expect(normalizeScanPreferences({ autoScanDropGb: 9999 }).autoScanDropGb).toBe(500)
+    expect(normalizeScanPreferences({ autoScanDropGb: NaN }).autoScanDropGb).toBe(5)
+    expect(
+      normalizeScanPreferences({ autoScanEnabled: 'yes' as unknown as boolean }).autoScanEnabled
+    ).toBe(true)
+    expect(normalizeScanPreferences({ autoScanEnabled: false }).autoScanEnabled).toBe(false)
+  })
 })

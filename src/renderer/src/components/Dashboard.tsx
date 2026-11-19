@@ -14,6 +14,9 @@ export default function Dashboard(): React.JSX.Element {
   const scanLog = useSiftStore((s) => s.scanLog)
   const runScan = useSiftStore((s) => s.runScan)
   const cancelScan = useSiftStore((s) => s.cancelScan)
+  const autoScanning = useSiftStore((s) => s.autoScanning)
+  const pendingSummary = useSiftStore((s) => s.pendingSummary)
+  const applyPendingSummary = useSiftStore((s) => s.applyPendingSummary)
   const selected = useSiftStore((s) => s.selected)
   const trashSelected = useSiftStore((s) => s.trashSelected)
   const clearSelected = useSiftStore((s) => s.clearSelected)
@@ -150,6 +153,15 @@ export default function Dashboard(): React.JSX.Element {
         <h1 className="text-[16px] font-semibold">Overview</h1>
         <div className="flex items-center gap-3 text-[12.5px] text-[var(--sift-text-muted)]">
           <span>Scanned {new Date(summary.scannedAt).toLocaleString()}</span>
+          {autoScanning && <span aria-live="polite">Updating…</span>}
+          {pendingSummary && (
+            <button
+              onClick={applyPendingSummary}
+              className="text-[var(--sift-accent)] hover:underline"
+            >
+              New scan ready · Show
+            </button>
+          )}
           <button
             onClick={runScan}
             className="rounded-lg border border-[var(--sift-border)] px-3 py-1.5 text-[var(--sift-text)] hover:bg-white/5"

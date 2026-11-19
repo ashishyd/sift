@@ -39,6 +39,10 @@ export class ScanCancelledError extends Error {
   }
 }
 
+export function isScanInFlight(): boolean {
+  return inFlightScan !== null
+}
+
 export function requestScanCancel(): void {
   cancelRequested = true
 }
@@ -500,6 +504,13 @@ export async function listVolumes(): Promise<{
     free: root?.freeBytes ?? 0,
     volumes
   }
+}
+
+/** Startup disk only. `df -k /` stays fast where plain `df` can hang on a dead network mount. */
+export async function listRootVolume(): Promise<{ total: number; free: number }> {
+  const { stdout } = await run('df', ['-k', '/'])
+  const root = parseDfOutput(stdout)[0]
+  return { total: root?.totalBytes ?? 0, free: root?.freeBytes ?? 0 }
 }
 
 /**

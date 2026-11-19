@@ -32,6 +32,19 @@ function App(): React.JSX.Element {
     [setActiveView]
   )
 
+  const onAutoScanProgress = useSiftStore((s) => s.onAutoScanProgress)
+  const onAutoScanState = useSiftStore((s) => s.onAutoScanState)
+  const onAutoScanUpdated = useSiftStore((s) => s.onAutoScanUpdated)
+
+  useEffect(() => {
+    const offs = [
+      window.api.onScanProgress(onAutoScanProgress),
+      window.api.onScanState(onAutoScanState),
+      window.api.onScanUpdated(onAutoScanUpdated)
+    ]
+    return () => offs.forEach((off) => off())
+  }, [onAutoScanProgress, onAutoScanState, onAutoScanUpdated])
+
   useEffect(() => {
     window.api.hasApiKey().then(setHasApiKey)
     window.api.hasClaudeCli().then(setHasClaudeCli)

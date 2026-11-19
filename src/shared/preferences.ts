@@ -11,6 +11,8 @@ export const DEFAULT_SCAN_PREFERENCES: ScanPreferences = {
   backgroundScanHours: 4,
   lowSpaceAlertsEnabled: true,
   lowSpaceThresholdGb: 20,
+  autoScanEnabled: true,
+  autoScanDropGb: 5,
   disabledCategoryIds: []
 }
 
@@ -61,6 +63,16 @@ export function normalizeScanPreferences(
       1,
       2000,
       DEFAULT_SCAN_PREFERENCES.lowSpaceThresholdGb
+    ),
+    autoScanEnabled:
+      typeof merged.autoScanEnabled === 'boolean'
+        ? merged.autoScanEnabled
+        : DEFAULT_SCAN_PREFERENCES.autoScanEnabled,
+    autoScanDropGb: clampInt(
+      merged.autoScanDropGb,
+      1,
+      500,
+      DEFAULT_SCAN_PREFERENCES.autoScanDropGb
     ),
     disabledCategoryIds: Array.isArray(merged.disabledCategoryIds)
       ? [...new Set(merged.disabledCategoryIds.filter((id) => typeof id === 'string'))]

@@ -46,13 +46,21 @@ describe('appendSnapshot', () => {
   it('replaces a scan taken within an hour and caps the list at 90', () => {
     const a = snap('2026-11-01T10:00:00Z', 100)
     const b = snap('2026-11-01T10:30:00Z', 99)
-    expect(appendSnapshot([a], b)).toEqual([b])
+    expect(appendSnapshot([a], b)).toEqual([{ ...b, at: a.at }])
     const many = Array.from({ length: 90 }, (_, i) =>
       snap(`2026-01-${String((i % 28) + 1).padStart(2, '0')}T00:00:00Z`, i)
     )
     const out = appendSnapshot(many, snap('2026-12-01T00:00:00Z', 1))
     expect(out).toHaveLength(90)
     expect(out[89].freeBytes).toBe(GB)
+  })
+
+  it('keeps adding points when scans arrive less than an hour apart', () => {
+    let list: ScanSnapshot[] = []
+    for (const at of ['10:00', '10:40', '11:20', '12:00']) {
+      list = appendSnapshot(list, snap(`2026-11-01T${at}:00Z`, 100))
+    }
+    expect(list.map((s) => s.at)).toEqual(['2026-11-01T10:00:00Z', '2026-11-01T11:20:00Z'])
   })
 })
 

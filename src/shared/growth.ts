@@ -18,14 +18,16 @@ export function snapshotOf(summary: ScanSummary): ScanSnapshot {
   }
 }
 
-/** Newest last. A scan within an hour of the previous one replaces it instead of adding a point. */
+/**
+ * Newest last. A scan within an hour of the previous point refreshes its data but keeps its
+ * timestamp, so frequent scans cannot slide one point forward forever and starve the history.
+ */
 export function appendSnapshot(list: ScanSnapshot[], snap: ScanSnapshot): ScanSnapshot[] {
   const last = list[list.length - 1]
-  const base =
-    last && new Date(snap.at).getTime() - new Date(last.at).getTime() < MIN_GAP_MS
-      ? list.slice(0, -1)
-      : list
-  return [...base, snap].slice(-MAX_SNAPSHOTS)
+  if (last && new Date(snap.at).getTime() - new Date(last.at).getTime() < MIN_GAP_MS) {
+    return [...list.slice(0, -1), { ...snap, at: last.at }].slice(-MAX_SNAPSHOTS)
+  }
+  return [...list, snap].slice(-MAX_SNAPSHOTS)
 }
 
 export interface CategoryGrowth {

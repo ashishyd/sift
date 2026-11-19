@@ -77,6 +77,15 @@ running and can quit it before you clear.
   disk drops below a limit you choose (20 GB by default). Clicking it opens Sift.
   Alerts do not repeat while you hover near the limit, and remind you at most
   once a day if you stay low. Configure or turn off in Settings.
+- **Stays fresh on its own.** After your first scan, Sift rescans without being
+  asked: a few seconds after launch, after your Mac wakes, when you return to the
+  window and the data is over 30 minutes old, and when free space drops 5 GB or
+  more below what the last scan saw (adjustable). It never scans twice within 10
+  minutes and skips automatic scans on battery, except at launch and on a
+  low-space alert. An open window shows "Updating…" and a "New scan ready" link,
+  so rows never shift while you have items selected. Turn it off in Settings.
+  The very first scan still waits for you or the 30-second menu bar timer, so
+  macOS permission prompts never appear without context.
 - **Menu bar companion.** A menu bar item shows reclaimable space at a glance,
   rescans in the background every few hours, and lets you scan or quit without
   opening the window.
