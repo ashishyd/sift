@@ -1,11 +1,35 @@
 import { useSiftStore } from '../store'
 import { formatBytes } from '../lib/format'
+import { riskTotals } from '@shared/reclaimable'
+import type { RiskLevel } from '@shared/types'
 import DiskLedger from './DiskLedger'
 import GrowthCard from './GrowthCard'
 import CategoryCard from './CategoryCard'
 import VolumesList from './VolumesList'
 import AiPanel from './AiPanel'
 import PermissionsBanner from './PermissionsBanner'
+import { bin } from '../lib/platform'
+
+const GROUPS: { risk: RiskLevel; title: string; hint: string; color: string }[] = [
+  {
+    risk: 'safe',
+    title: 'Comes back on its own',
+    hint: 'Caches and build output. Apps rebuild them when needed.',
+    color: 'text-[var(--sift-safe)]'
+  },
+  {
+    risk: 'caution',
+    title: 'Look before you clear',
+    hint: 'Usually fine. Each one costs you a download or a rebuild.',
+    color: 'text-[var(--sift-caution)]'
+  },
+  {
+    risk: 'review',
+    title: 'Your files. Sift only points.',
+    hint: 'Nothing here is chosen for you. Open each one.',
+    color: 'text-[var(--sift-review)]'
+  }
+]
 
 export default function Dashboard(): React.JSX.Element {
   const summary = useSiftStore((s) => s.summary)
@@ -18,7 +42,7 @@ export default function Dashboard(): React.JSX.Element {
   const pendingSummary = useSiftStore((s) => s.pendingSummary)
   const applyPendingSummary = useSiftStore((s) => s.applyPendingSummary)
   const selected = useSiftStore((s) => s.selected)
-  const trashSelected = useSiftStore((s) => s.trashSelected)
+  const setActiveView = useSiftStore((s) => s.setActiveView)
   const clearSelected = useSiftStore((s) => s.clearSelected)
 
   if (!summary && !isScanning) {
@@ -35,7 +59,7 @@ export default function Dashboard(): React.JSX.Element {
         </div>
         <ul className="divide-y divide-[var(--sift-border)] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)]">
           <li className="px-4 py-2.5">
-            <div className="text-[13px] font-medium">Everything goes to the Trash first</div>
+            <div className="text-[13px] font-medium">Everything goes to the {bin} first</div>
             <div className="text-[12.5px] text-[var(--sift-text-muted)]">
               Recoverable until you empty it yourself.
             </div>
@@ -145,12 +169,21 @@ export default function Dashboard(): React.JSX.Element {
   const visibleCategories = summary.categories.filter((c) => !c.missing && c.items.length > 0)
   const sizeMap = new Map<string, number>()
   summary.categories.forEach((c) => c.items.forEach((i) => sizeMap.set(i.path, i.sizeBytes)))
+  const totals = riskTotals(summary.categories)
   const selectedBytes = Array.from(selected).reduce((s, p) => s + (sizeMap.get(p) ?? 0), 0)
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-[16px] font-semibold">Overview</h1>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1.5">
+          <h1 className="text-[32px] font-semibold leading-tight tracking-tight tabular-nums">
+            {formatBytes(summary.reclaimableBytes)} can go
+          </h1>
+          <p className="text-[13px] text-[var(--sift-text-muted)]">
+            <span className="text-[var(--sift-safe)]">{formatBytes(totals.safe)}</span> of it
+            rebuilds itself. The rest needs a look first.
+          </p>
+        </div>
         <div className="flex items-center gap-3 text-[12.5px] text-[var(--sift-text-muted)]">
           <span>Scanned {new Date(summary.scannedAt).toLocaleString()}</span>
           {autoScanning && <span aria-live="polite">Updating…</span>}
@@ -177,15 +210,34 @@ export default function Dashboard(): React.JSX.Element {
 
       <div className="flex flex-wrap items-start gap-4">
         <section className="min-w-0 flex-[999_1_480px] space-y-3">
-          <h2 className="text-[15px] font-semibold">Categories</h2>
           {visibleCategories.length === 0 && (
             <p className="text-[13px] text-[var(--sift-text-muted)]">
               Nothing found in the places Sift checks — your Mac looks clean.
             </p>
           )}
-          {visibleCategories.map((c) => (
-            <CategoryCard key={c.id} category={c} />
-          ))}
+          {GROUPS.map((g) => {
+            const cats = visibleCategories.filter((c) => c.risk === g.risk)
+            if (cats.length === 0) return null
+            return (
+              <div key={g.risk} className="space-y-2">
+                <div className="flex items-baseline justify-between gap-3 pt-1">
+                  <h2 className="text-[15px] font-semibold">
+                    <span aria-hidden="true" className={g.color}>
+                      ●{' '}
+                    </span>
+                    {g.title}
+                  </h2>
+                  <span className="text-[13px] tabular-nums text-[var(--sift-text-muted)]">
+                    {formatBytes(totals[g.risk])}
+                  </span>
+                </div>
+                <p className="text-[12.5px] text-[var(--sift-text-muted)]">{g.hint}</p>
+                {cats.map((c) => (
+                  <CategoryCard key={c.id} category={c} />
+                ))}
+              </div>
+            )
+          })}
         </section>
 
         <aside className="min-w-0 flex-[1_1_260px] space-y-4">
@@ -206,7 +258,7 @@ export default function Dashboard(): React.JSX.Element {
             </strong>
             <span className="text-[var(--sift-text-muted)]">
               {' '}
-              selected · moves to Trash, recoverable
+              selected · moves to {bin}, recoverable
             </span>
           </span>
           <div className="flex gap-2">
@@ -217,10 +269,10 @@ export default function Dashboard(): React.JSX.Element {
               Deselect
             </button>
             <button
-              onClick={trashSelected}
+              onClick={() => setActiveView('review')}
               className="rounded-lg bg-[var(--sift-review)] px-4 py-2 text-[12.5px] font-medium text-black"
             >
-              Move to Trash
+              Review and move to {bin}
             </button>
           </div>
         </div>

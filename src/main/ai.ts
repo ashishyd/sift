@@ -60,6 +60,11 @@ export function localHeuristicSuggestion(summary: ScanSummary): RawSuggestion {
   }
 }
 
+/** Exactly the category brief Claude receives, as text, for the Settings preview. */
+export function aiBriefPreview(summary: ScanSummary): string {
+  return JSON.stringify(categoryBriefFor(summary), null, 2)
+}
+
 function categoryBriefFor(summary: ScanSummary): unknown {
   return summary.categories
     .filter((c) => !c.missing)

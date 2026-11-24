@@ -3,6 +3,16 @@ import { homedir } from 'os'
 import { basename, dirname, join } from 'path'
 import { run, isPermissionError, isPermissionErrno } from './exec'
 import { CATEGORY_DEFS, DEV_SEARCH_ROOTS } from './categories'
+import { platform } from './platform'
+import {
+  dirSizeBytes,
+  findDirsByName,
+  findFilesByExtension,
+  findLargeFiles,
+  listWindowsVolumes,
+  projectHasRecentFile,
+  recycleBinBytes
+} from './winScan'
 import {
   USER_CACHES_DEDICATED_NAMES,
   computeReclaimableBytes,
@@ -55,6 +65,7 @@ type AccessState = 'ok' | 'denied' | 'missing'
 
 /** Reads a directory macOS only lets Full Disk Access holders list. */
 async function hasFullDiskAccess(): Promise<boolean> {
+  if (platform === 'win') return false
   for (const probe of ['Library/Safari', 'Library/Mail', 'Library/Messages']) {
     try {
       await fs.readdir(join(homedir(), probe))
@@ -78,6 +89,7 @@ async function accessState(p: string): Promise<AccessState> {
 
 /** Size (bytes) of a file or directory via `du`, which is much faster than a JS walk. */
 async function duBytes(p: string): Promise<{ bytes: number; denied: boolean }> {
+  if (platform === 'win') return dirSizeBytes(p, () => cancelRequested)
   const { stdout, stderr } = await run('du', ['-sk', p])
   const kb = parseInt(stdout.trim().split(/\s+/)[0] ?? '0', 10)
   return {
@@ -101,6 +113,9 @@ async function statItem(
     return { mtime: null, atime: null, size: 0, isDir: false }
   }
 }
+
+/** shared/staleArtifacts compares with '/'; Windows paths use backslashes. */
+const toPosix = (p: string): string => p.replace(/\\/g, '/')
 
 function olderThanDays(iso: string | null, days: number | undefined): boolean {
   if (!days) return true
@@ -177,7 +192,7 @@ async function scanShallowCategory(
       continue
     }
     for (const name of entries) {
-      if (name === '.DS_Store') continue
+      if (name === '.DS_Store' || name === 'desktop.ini') continue
       // Dedicated categories already cover Homebrew/Yarn under ~/Library/Caches.
       if (id === 'user-caches' && USER_CACHES_DEDICATED_NAMES.has(name)) continue
       const full = join(root, name)
@@ -224,6 +239,7 @@ async function projectIsActive(
   project: string,
   minAgeDays: number
 ): Promise<{ active: boolean; denied: boolean }> {
+  if (platform === 'win') return projectHasRecentFile(project, minAgeDays, ARTIFACT_DIR_NAMES)
   // Prune every artefact dir and .git so only the project's own files decide staleness.
   const prune = ARTIFACT_DIR_NAMES.flatMap((n) => ['-name', n, '-o']).concat(['-name', '.git'])
   const { stdout, stderr } = await run('find', [
@@ -255,6 +271,12 @@ async function scanStaleArtifacts(): Promise<CategoryResult> {
   for (const root of DEV_SEARCH_ROOTS) {
     throwIfCancelled()
     if ((await accessState(root)) !== 'ok') continue
+    if (platform === 'win') {
+      const hunt = await findDirsByName(root, ARTIFACT_DIR_NAMES, 6, () => cancelRequested)
+      if (hunt.denied) permissionDenied = true
+      hunt.paths.forEach((p) => found.add(p))
+      continue
+    }
     const { stdout, stderr } = await run('find', [
       root,
       '-maxdepth',
@@ -280,7 +302,7 @@ async function scanStaleArtifacts(): Promise<CategoryResult> {
   const items: ScanItem[] = []
   for (const dir of found) {
     throwIfCancelled()
-    if (isExcludedLocation(dir, homedir())) continue
+    if (isExcludedLocation(toPosix(dir), toPosix(homedir()))) continue
     const project = dirname(dir)
     let parentFiles: string[]
     try {
@@ -345,17 +367,29 @@ async function scanLargeFiles(prefs: ScanPreferences): Promise<CategoryResult> {
       permissionDenied = true
       continue
     }
-    const { stdout, stderr } = await run('find', [
-      root,
-      '-type',
-      'f',
-      '-size',
-      `+${sizeKb}`,
-      '-mtime',
-      `+${minAge}`
-    ])
-    if (isPermissionError(stderr)) permissionDenied = true
-    const files = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+    let files: string[]
+    if (platform === 'win') {
+      const hunt = await findLargeFiles(
+        root,
+        prefs.largeFileMinMb * 1024 * 1024,
+        minAge,
+        () => cancelRequested
+      )
+      if (hunt.denied) permissionDenied = true
+      files = hunt.paths
+    } else {
+      const { stdout, stderr } = await run('find', [
+        root,
+        '-type',
+        'f',
+        '-size',
+        `+${sizeKb}`,
+        '-mtime',
+        `+${minAge}`
+      ])
+      if (isPermissionError(stderr)) permissionDenied = true
+      files = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+    }
     for (const f of files.slice(0, MAX_ITEMS_PER_CATEGORY)) {
       const st = await statItem(f)
       items.push({
@@ -400,20 +434,27 @@ async function scanOrphanedDmgs(): Promise<CategoryResult> {
       permissionDenied = true
       continue
     }
-    for (const pattern of extensions) {
-      const { stdout, stderr } = await run('find', [
-        root,
-        '-maxdepth',
-        '3',
-        '-type',
-        'f',
-        '-iname',
-        pattern,
-        '-mtime',
-        `+${minAge}`
-      ])
-      if (isPermissionError(stderr)) permissionDenied = true
-      const files = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+    for (const pattern of platform === 'win' ? ['windows'] : extensions) {
+      let files: string[]
+      if (platform === 'win') {
+        const hunt = await findFilesByExtension(root, ['.iso', '.vhd', '.vhdx', '.img'], minAge)
+        if (hunt.denied) permissionDenied = true
+        files = hunt.paths
+      } else {
+        const { stdout, stderr } = await run('find', [
+          root,
+          '-maxdepth',
+          '3',
+          '-type',
+          'f',
+          '-iname',
+          pattern,
+          '-mtime',
+          `+${minAge}`
+        ])
+        if (isPermissionError(stderr)) permissionDenied = true
+        files = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+      }
       for (const f of files) {
         if (items.some((i) => i.path === f)) continue
         const st = await statItem(f)
@@ -496,6 +537,10 @@ export async function listVolumes(): Promise<{
   free: number
   volumes: Array<{ device: string; totalBytes: number; freeBytes: number; mountPoint: string }>
 }> {
+  if (platform === 'win') {
+    const volumes = await listWindowsVolumes()
+    return { total: volumes[0]?.totalBytes ?? 0, free: volumes[0]?.freeBytes ?? 0, volumes }
+  }
   const { stdout } = await run('df', ['-k'])
   const volumes = parseDfOutput(stdout)
   const root = volumes.find((v) => v.mountPoint === '/') ?? volumes[0]
@@ -508,6 +553,10 @@ export async function listVolumes(): Promise<{
 
 /** Startup disk only. `df -k /` stays fast where plain `df` can hang on a dead network mount. */
 export async function listRootVolume(): Promise<{ total: number; free: number }> {
+  if (platform === 'win') {
+    const root = (await listWindowsVolumes())[0]
+    return { total: root?.totalBytes ?? 0, free: root?.freeBytes ?? 0 }
+  }
   const { stdout } = await run('df', ['-k', '/'])
   const root = parseDfOutput(stdout)[0]
   return { total: root?.totalBytes ?? 0, free: root?.freeBytes ?? 0 }
@@ -600,6 +649,22 @@ export async function listFolder(dirPath: string): Promise<FolderListing> {
   }
 }
 
+/** The Recycle Bin has no readable path, so only its total is known. Items stay unlisted, like a capped Trash. */
+async function scanRecycleBin(def: (typeof CATEGORY_DEFS)[number]): Promise<CategoryResult> {
+  const bytes = await recycleBinBytes()
+  return {
+    id: def.id,
+    label: def.label,
+    description: def.description,
+    risk: def.risk,
+    totalSizeBytes: bytes,
+    items: [],
+    matchedItemCount: 0,
+    missing: bytes === 0,
+    permissionDenied: false
+  }
+}
+
 async function doFullScan(
   onProgress?: (label: string, done: number, total: number) => void,
   ignoredPaths: string[] = [],
@@ -624,6 +689,11 @@ async function doFullScan(
     throwIfCancelled()
     onProgress?.(def.label, done, totalSteps)
     const minAge = resolveMinAgeDays(def.id, def.minAgeDays, prefs)
+    if (platform === 'win' && def.id === 'trash') {
+      results.push(await scanRecycleBin(def))
+      done++
+      continue
+    }
     results.push(
       await scanShallowCategory(def.id, def.label, def.description, def.risk, def.paths, minAge)
     )

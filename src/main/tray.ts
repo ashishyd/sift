@@ -2,6 +2,8 @@ import { Tray, Menu, nativeImage, app, type BrowserWindow } from 'electron'
 import { readFileSync } from 'fs'
 import trayIconAsset from '../../resources/trayTemplate.png?asset'
 import trayIconAsset2x from '../../resources/trayTemplate@2x.png?asset'
+import appIconAsset from '../../resources/icon.png?asset'
+import { platform } from './platform'
 import { getScanPreferences, loadLastScan } from './config'
 import type { ScanSummary } from '../shared/types'
 
@@ -35,9 +37,26 @@ export async function getLastScanSummary(): Promise<ScanSummary | null> {
   return lastSummary
 }
 
+/** macOS shows the size beside the icon; Windows has no tray title, so it goes in the tooltip. */
+function showReclaimable(bytes: number): void {
+  if (platform === 'mac') tray?.setTitle(` ${formatBytesShort(bytes)}`)
+  else tray?.setToolTip(`Sift — ${formatBytesShort(bytes)} reclaimable`)
+}
+
+function trayIcon(): Electron.NativeImage {
+  if (platform === 'win') {
+    // The mac template image is black with alpha and would vanish on a dark taskbar.
+    return nativeImage.createFromPath(appIconAsset).resize({ width: 32, height: 32 })
+  }
+  const icon = nativeImage.createFromPath(trayIconAsset)
+  icon.addRepresentation({ scaleFactor: 2, buffer: readFileSync(trayIconAsset2x) })
+  icon.setTemplateImage(true)
+  return icon
+}
+
 export function setLastScanSummary(summary: ScanSummary): void {
   lastSummary = summary
-  tray?.setTitle(` ${formatBytesShort(summary.reclaimableBytes)}`)
+  showReclaimable(summary.reclaimableBytes)
   rebuildMenuRef?.()
 }
 
@@ -57,12 +76,26 @@ export async function rescheduleBackgroundScan(): Promise<void> {
   scheduleBackgroundScan(prefs.backgroundScanHours * 60 * 60 * 1000)
 }
 
+/** The three biggest non-Trash categories, as disabled menu rows. */
+function topWins(): Electron.MenuItemConstructorOptions[] {
+  const top = (lastSummary?.categories ?? [])
+    .filter((c) => c.id !== 'trash' && !c.missing && c.totalSizeBytes > 0)
+    .sort((x, y) => y.totalSizeBytes - x.totalSizeBytes)
+    .slice(0, 3)
+  if (top.length === 0) return []
+  return [
+    { type: 'separator' },
+    { label: 'Biggest wins', enabled: false },
+    ...top.map((c) => ({
+      label: `${c.label}  ${formatBytesShort(c.totalSizeBytes)}`,
+      enabled: false
+    }))
+  ]
+}
+
 export function createTray(getMainWindow: () => BrowserWindow | null, hooks: TrayHooks): Tray {
   hooksRef = hooks
-  const icon = nativeImage.createFromPath(trayIconAsset)
-  icon.addRepresentation({ scaleFactor: 2, buffer: readFileSync(trayIconAsset2x) })
-  icon.setTemplateImage(true)
-  tray = new Tray(icon)
+  tray = new Tray(trayIcon())
   tray.setToolTip('Sift — know before you clear.')
 
   const showWindow = (): void => {
@@ -81,6 +114,13 @@ export function createTray(getMainWindow: () => BrowserWindow | null, hooks: Tra
           : 'No scan yet',
         enabled: false
       },
+      ...(lastSummary?.volumes?.[0]
+        ? [{ label: `${formatBytesShort(lastSummary.volumes[0].freeBytes)} free`, enabled: false }]
+        : []),
+      ...topWins(),
+      ...(lastSummary?.categories.some((c) => c.permissionDenied)
+        ? [{ label: '⚠ Last scan could not read some folders', enabled: false }]
+        : []),
       { type: 'separator' },
       { label: 'Open Sift', click: showWindow },
       {
@@ -101,7 +141,7 @@ export function createTray(getMainWindow: () => BrowserWindow | null, hooks: Tra
   loadLastScan().then((cached) => {
     if (cached && !lastSummary) {
       lastSummary = cached
-      tray?.setTitle(` ${formatBytesShort(cached.reclaimableBytes)}`)
+      showReclaimable(cached.reclaimableBytes)
       rebuildMenu()
     }
   })

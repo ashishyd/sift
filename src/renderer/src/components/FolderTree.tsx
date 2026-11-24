@@ -4,6 +4,7 @@ import type { CategoryResult, RiskLevel, ScanItem } from '@shared/types'
 import { categoryHiddenStats } from '@shared/preferences'
 import { formatBytes, formatRelativeDate } from '../lib/format'
 import { useSiftStore } from '../store'
+import { bin } from '../lib/platform'
 
 const RISK_BG: Record<RiskLevel, string> = {
   safe: 'bg-[var(--sift-safe)]',
@@ -176,11 +177,13 @@ function ItemNode({
 function CategoryRow({
   category,
   expanded,
-  onToggleExpand
+  onToggleExpand,
+  onFocus
 }: {
   category: CategoryResult
   expanded: boolean
   onToggleExpand: () => void
+  onFocus: () => void
 }): React.JSX.Element {
   const selected = useSiftStore((s) => s.selected)
   const selectAllInCategory = useSiftStore((s) => s.selectAllInCategory)
@@ -192,7 +195,13 @@ function CategoryRow({
 
   return (
     <div className="flex items-center gap-2 py-2 pr-2 rounded-lg hover:bg-white/[0.03]">
-      <button onClick={onToggleExpand} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+      <button
+        onClick={() => {
+          onFocus()
+          onToggleExpand()
+        }}
+        className="flex items-center gap-2 flex-1 min-w-0 text-left"
+      >
         <Chevron expanded={expanded} />
         <input
           type="checkbox"
@@ -222,6 +231,61 @@ function CategoryRow({
   )
 }
 
+function KnowPanel({ category }: { category: CategoryResult | null }): React.JSX.Element {
+  const selectAllInCategory = useSiftStore((s) => s.selectAllInCategory)
+  const newest = category?.items.reduce<string>(
+    (m, i) => (i.lastModified && i.lastModified > m ? i.lastModified : m),
+    ''
+  )
+  return (
+    <aside
+      aria-labelledby="know-h"
+      className="min-w-0 flex-[1_1_260px] space-y-3 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-5"
+    >
+      <span className="text-[11.5px] text-[var(--sift-text-muted)]">Know before you clear</span>
+      {!category ? (
+        <p id="know-h" className="text-[12.5px] text-[var(--sift-text-muted)]">
+          Click a category to see what it is and what happens if you clear it.
+        </p>
+      ) : (
+        <>
+          <h2 id="know-h" className="text-[15px] font-semibold">
+            {category.label}
+          </h2>
+          <div className="flex items-center gap-2 text-[12.5px] text-[var(--sift-text-muted)]">
+            <span
+              aria-hidden="true"
+              className={clsx('size-2 rounded-sm', RISK_BG[category.risk])}
+            />
+            {RISK_LABEL[category.risk]} ·{' '}
+            <span className="tabular-nums">{formatBytes(category.totalSizeBytes)}</span> ·{' '}
+            {category.matchedItemCount ?? category.items.length} item(s)
+          </div>
+          <p className="text-[13px] leading-relaxed">{category.description}</p>
+          {newest && (
+            <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+              Newest item touched {formatRelativeDate(newest)}
+            </p>
+          )}
+          {category.permissionDenied && (
+            <p className="text-[12.5px] text-[var(--sift-caution)]">
+              macOS refused part of this folder, so the size may be low.
+            </p>
+          )}
+          {category.id !== 'trash' && (
+            <button
+              onClick={() => selectAllInCategory(category.items.map((i) => i.path))}
+              className="w-full rounded-lg bg-[var(--sift-accent-soft)] px-3 py-2 text-[12.5px] font-medium text-[var(--sift-accent)]"
+            >
+              Select all in this category
+            </button>
+          )}
+        </>
+      )}
+    </aside>
+  )
+}
+
 export default function FolderTree(): React.JSX.Element {
   const summary = useSiftStore((s) => s.summary)
   const runScan = useSiftStore((s) => s.runScan)
@@ -231,6 +295,7 @@ export default function FolderTree(): React.JSX.Element {
   const trashSelected = useSiftStore((s) => s.trashSelected)
   const emptyTrash = useSiftStore((s) => s.emptyTrash)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [focusId, setFocusId] = useState<string | null>(null)
 
   if (!summary) {
     return (
@@ -306,38 +371,42 @@ export default function FolderTree(): React.JSX.Element {
         </div>
       </header>
 
-      <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-2">
-        {categories.map((category) => {
-          const isExpanded = expanded.has(category.id)
-          const hidden = categoryHiddenStats(category)
-          return (
-            <div key={category.id}>
-              <CategoryRow
-                category={category}
-                expanded={isExpanded}
-                onToggleExpand={() => toggleExpand(category.id)}
-              />
-              {isExpanded && (
-                <div className="ml-[19px] pl-2 border-l border-[var(--sift-border)] mb-1">
-                  {category.items.map((item) => (
-                    <ItemNode
-                      key={item.path}
-                      item={item}
-                      depth={0}
-                      parentBytes={category.totalSizeBytes}
-                    />
-                  ))}
-                  {hidden.count > 0 && (
-                    <p className="text-[12px] text-[var(--sift-text-muted)] py-1.5 pl-7">
-                      +{hidden.count} more ({formatBytes(hidden.bytes)}) — list capped; totals
-                      include them
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="min-w-0 flex-[999_1_420px] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-2">
+          {categories.map((category) => {
+            const isExpanded = expanded.has(category.id)
+            const hidden = categoryHiddenStats(category)
+            return (
+              <div key={category.id}>
+                <CategoryRow
+                  category={category}
+                  expanded={isExpanded}
+                  onToggleExpand={() => toggleExpand(category.id)}
+                  onFocus={() => setFocusId(category.id)}
+                />
+                {isExpanded && (
+                  <div className="ml-[19px] pl-2 border-l border-[var(--sift-border)] mb-1">
+                    {category.items.map((item) => (
+                      <ItemNode
+                        key={item.path}
+                        item={item}
+                        depth={0}
+                        parentBytes={category.totalSizeBytes}
+                      />
+                    ))}
+                    {hidden.count > 0 && (
+                      <p className="text-[12px] text-[var(--sift-text-muted)] py-1.5 pl-7">
+                        +{hidden.count} more ({formatBytes(hidden.bytes)}) — list capped; totals
+                        include them
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <KnowPanel category={categories.find((c) => c.id === focusId) ?? null} />
       </div>
 
       {trashCategory && (
@@ -363,7 +432,7 @@ export default function FolderTree(): React.JSX.Element {
             </strong>
             <span className="text-[var(--sift-text-muted)]">
               {' '}
-              selected · moves to Trash, recoverable
+              selected · moves to {bin}, recoverable
             </span>
           </span>
           <div className="flex gap-2">
@@ -377,7 +446,7 @@ export default function FolderTree(): React.JSX.Element {
               onClick={trashSelected}
               className="rounded-lg bg-[var(--sift-review)] px-4 py-2 text-[12.5px] font-medium text-black"
             >
-              Move to Trash
+              Move to {bin}
             </button>
           </div>
         </div>

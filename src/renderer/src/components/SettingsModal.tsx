@@ -28,6 +28,8 @@ export default function SettingsModal(): React.JSX.Element | null {
   const saveScanPreferences = useSiftStore((s) => s.saveScanPreferences)
   const categoryDefs = useSiftStore((s) => s.categoryDefs)
   const loadCategoryDefs = useSiftStore((s) => s.loadCategoryDefs)
+  const loadAiBrief = useSiftStore((s) => s.loadAiBrief)
+  const [brief, setBrief] = useState<string | null>(null)
   const [tab, setTab] = useState<SettingsTab>('access')
   const [key, setKey] = useState('')
   const [saving, setSaving] = useState(false)
@@ -343,6 +345,20 @@ export default function SettingsModal(): React.JSX.Element | null {
                   Claude turns a scan into plain-English recommendations. Only category labels,
                   sizes and a few example filenames are sent — never file contents.
                 </p>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={async () => setBrief(brief === null ? await loadAiBrief() : null)}
+                    className="text-[12.5px] font-medium text-[var(--sift-accent)] hover:underline"
+                  >
+                    {brief === null ? 'Show exactly what Claude sees' : 'Hide what Claude sees'}
+                  </button>
+                  {brief !== null && (
+                    <pre className="max-h-[220px] overflow-auto rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3 text-[11.5px] leading-relaxed text-[var(--sift-text-muted)]">
+                      {brief || 'Scan first. There is nothing to send yet.'}
+                    </pre>
+                  )}
+                </div>
 
                 <div className="flex items-center justify-between rounded-lg border border-[var(--sift-border)] px-3 py-2">
                   <div>

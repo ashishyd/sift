@@ -8,7 +8,9 @@ import { findDuplicates } from './duplicates'
 import { scanAiApps } from './aiApps'
 import { scanHiddenSpace, quitApp, deleteSnapshots, deleteSimulatorRuntime } from './hiddenSpace'
 import { emptyTrash, moveToTrash } from './trashOps'
-import { getSuggestion, askAboutScan, hasClaudeCli } from './ai'
+import { platform } from './platform'
+import { trashName } from '../shared/platform'
+import { getSuggestion, askAboutScan, hasClaudeCli, aiBriefPreview } from './ai'
 import {
   setApiKey,
   clearApiKey,
@@ -37,6 +39,8 @@ let isQuitting = false
 let mainWindow: BrowserWindow | null = null
 let trayRef: Tray | null = null
 
+const bin = trashName(platform)
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1080,
@@ -45,7 +49,7 @@ function createWindow(): BrowserWindow {
     minHeight: 560,
     show: false,
     autoHideMenuBar: true,
-    titleBarStyle: 'hiddenInset',
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -99,7 +103,8 @@ app.whenReady().then(() => {
 
   ensureWindow()
 
-  if (process.platform === 'darwin') {
+  // Windows keeps running in the notification area like macOS does in the menu bar.
+  if (platform !== 'other') {
     trayRef = createTray(ensureWindow, {
       scanNow: async () => {
         try {
@@ -205,18 +210,22 @@ app.whenReady().then(() => {
 
   ipcMain.handle('sift:hasApiKey', async () => hasApiKey())
   ipcMain.handle('sift:hasClaudeCli', async () => hasClaudeCli())
+  ipcMain.handle('sift:aiBrief', async () => {
+    const summary = await getLastScanSummary()
+    return summary ? aiBriefPreview(summary) : ''
+  })
   ipcMain.handle('sift:setApiKey', async (_event, key: string) => setApiKey(key))
   ipcMain.handle('sift:clearApiKey', async () => clearApiKey())
 
   ipcMain.handle('sift:confirmTrash', async (_event, count: number, sizeLabel: string) => {
     const result = await dialog.showMessageBox(ensureWindow(), {
       type: 'warning',
-      buttons: ['Move to Trash', 'Cancel'],
+      buttons: [`Move to ${bin}`, 'Cancel'],
       defaultId: 1,
       cancelId: 1,
-      title: 'Move to Trash?',
-      message: `Move ${count} item(s) to Trash?`,
-      detail: `This will free up roughly ${sizeLabel}. Items go to Trash and can be restored until you empty it.`
+      title: `Move to ${bin}?`,
+      message: `Move ${count} item(s) to ${bin}?`,
+      detail: `This will free up roughly ${sizeLabel}. Items go to ${bin} and can be restored until you empty it.`
     })
     return result.response === 0
   })
@@ -224,12 +233,12 @@ app.whenReady().then(() => {
   ipcMain.handle('sift:confirmEmptyTrash', async (_event, sizeLabel: string) => {
     const result = await dialog.showMessageBox(ensureWindow(), {
       type: 'warning',
-      buttons: ['Empty Trash', 'Cancel'],
+      buttons: [`Empty ${bin}`, 'Cancel'],
       defaultId: 1,
       cancelId: 1,
-      title: 'Empty Trash?',
-      message: 'Permanently delete everything in Trash?',
-      detail: `This frees about ${sizeLabel} and cannot be undone. Items currently in Trash will be permanently deleted.`
+      title: `Empty ${bin}?`,
+      message: `Permanently delete everything in ${bin}?`,
+      detail: `This frees about ${sizeLabel} and cannot be undone. Items currently in ${bin} will be permanently deleted.`
     })
     return result.response === 0
   })
@@ -248,7 +257,8 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // With a tray item (macOS, Windows) closing the window leaves Sift running; only Quit exits.
+  if (platform === 'other') {
     app.quit()
   }
 })

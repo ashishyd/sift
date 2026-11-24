@@ -4,6 +4,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { isPermissionErrno } from './exec'
 import type { AccessCheck } from '../shared/types'
+import { platform } from './platform'
 
 const home = homedir()
 
@@ -17,6 +18,8 @@ const CHECKED_FOLDERS: Array<{ id: string; label: string; path: string }> = [
 
 /** Attempting the readdir IS what triggers macOS's native permission prompt the first time. */
 export async function checkAllPermissions(): Promise<AccessCheck[]> {
+  // Windows has no per-folder consent prompt; a refused folder shows up as permissionDenied in the scan.
+  if (platform === 'win') return []
   return Promise.all(
     CHECKED_FOLDERS.map(async ({ id, label, path }) => {
       try {
@@ -32,6 +35,10 @@ export async function checkAllPermissions(): Promise<AccessCheck[]> {
 export type PrivacyPane = 'files' | 'full-disk-access'
 
 export async function openPrivacySettings(pane: PrivacyPane): Promise<void> {
+  if (platform === 'win') {
+    await shell.openExternal('ms-settings:privacy-broadfilesystemaccess')
+    return
+  }
   const url =
     pane === 'full-disk-access'
       ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'

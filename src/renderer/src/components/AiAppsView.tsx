@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { formatBytes } from '../lib/format'
 import { useSiftStore } from '../store'
 import RiskBadge from './RiskBadge'
+import { bin } from '../lib/platform'
 
 export default function AiAppsView(): React.JSX.Element {
   const report = useSiftStore((s) => s.aiApps)
@@ -75,7 +76,7 @@ export default function AiAppsView(): React.JSX.Element {
               </div>
             </div>
             <span className="text-[11.5px] text-[var(--sift-text-muted)]">
-              Cleared items go to the Trash. Chats, logins and settings are never offered.
+              Cleared items go to the {bin}. Chats, logins and settings are never offered.
             </span>
           </div>
           <div
@@ -89,11 +90,11 @@ export default function AiAppsView(): React.JSX.Element {
           <div className="flex gap-5 text-[11.5px] text-[var(--sift-text-muted)]">
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-sm bg-[var(--sift-safe)]" />
-              Clearable
+              Clearable, comes back
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-sm bg-[#3a4152]" />
-              Keep
+              Kept, it is yours
             </span>
           </div>
         </section>
@@ -174,7 +175,9 @@ export default function AiAppsView(): React.JSX.Element {
                       </span>
                       <RiskBadge risk={c.risk} />
                       {!c.clearable && (
-                        <span className="text-[11px] text-[var(--sift-text-muted)]">Keep</span>
+                        <span className="text-[11px] text-[var(--sift-text-muted)]">
+                          <span aria-hidden="true">⚿ </span>Kept
+                        </span>
                       )}
                     </div>
                     <p
@@ -212,7 +215,7 @@ export default function AiAppsView(): React.JSX.Element {
             </strong>
             <span className="text-[var(--sift-text-muted)]">
               {' '}
-              selected · moves to Trash, recoverable
+              selected · moves to {bin}, recoverable
             </span>
           </span>
           <div className="flex gap-2">
@@ -226,7 +229,7 @@ export default function AiAppsView(): React.JSX.Element {
               onClick={() => clear(Array.from(picked))}
               className="rounded-lg bg-[var(--sift-review)] px-4 py-2 text-[12.5px] font-medium text-black"
             >
-              Move to Trash
+              Move to {bin}
             </button>
           </div>
         </div>

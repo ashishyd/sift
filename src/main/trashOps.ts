@@ -3,6 +3,8 @@ import { promises as fs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { run } from './exec'
+import { platform } from './platform'
+import { emptyRecycleBin, recycleBinBytes } from './winScan'
 import type { TrashResult } from '../shared/types'
 
 /** Moves paths to the macOS Trash (Finder-recoverable) — never a permanent delete. */
@@ -27,6 +29,12 @@ export async function moveToTrash(paths: string[]): Promise<TrashResult> {
 
 /** Permanently empties the Finder Trash via AppleScript. */
 export async function emptyTrash(): Promise<{ freedBytes: number }> {
+  if (platform === 'win') {
+    const freedBytes = await recycleBinBytes()
+    const { stderr, code } = await emptyRecycleBin()
+    if (code !== 0) throw new Error(stderr.trim() || 'Could not empty the Recycle Bin')
+    return { freedBytes }
+  }
   const trashPath = join(homedir(), '.Trash')
   let freedBytes = 0
   try {

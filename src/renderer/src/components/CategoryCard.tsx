@@ -5,6 +5,7 @@ import { categoryHiddenStats } from '@shared/preferences'
 import { formatBytes, formatRelativeDate } from '../lib/format'
 import { useSiftStore } from '../store'
 import RiskBadge from './RiskBadge'
+import { bin } from '../lib/platform'
 
 export default function CategoryCard({ category }: { category: CategoryResult }): React.JSX.Element | null {
   const [expanded, setExpanded] = useState(false)
@@ -64,7 +65,7 @@ export default function CategoryCard({ category }: { category: CategoryResult })
                 onClick={emptyTrash}
                 className="text-[12.5px] font-medium text-[var(--sift-review)] hover:underline"
               >
-                Empty Trash permanently
+                Empty {bin} permanently
               </button>
             ) : (
               <label className="flex items-center gap-2 text-[12.5px] text-[var(--sift-text-muted)] cursor-pointer">
@@ -82,7 +83,7 @@ export default function CategoryCard({ category }: { category: CategoryResult })
                 onClick={() => trashPaths(paths.filter((p) => selected.has(p)))}
                 className="text-[12.5px] font-medium text-[var(--sift-review)] hover:underline"
               >
-                Move {selectedCount} to Trash
+                Move {selectedCount} to {bin}
               </button>
             )}
           </div>

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { formatBytes } from '../lib/format'
+import { keeperForRule } from '../lib/keeper'
 import { useSiftStore } from '../store'
+import { bin } from '../lib/platform'
 
 export default function DuplicatesView(): React.JSX.Element {
   const duplicates = useSiftStore((s) => s.duplicates)
@@ -10,6 +12,9 @@ export default function DuplicatesView(): React.JSX.Element {
   const openPrivacySettings = useSiftStore((s) => s.openPrivacySettings)
   /** hash → path to keep (defaults to oldest / files[0]) */
   const [keepers, setKeepers] = useState<Record<string, string>>({})
+  /** Folder whose copy wins in every group that has one, unless a group is set by hand. */
+  const [keepFolder, setKeepFolder] = useState('')
+  const FOLDERS = ['Downloads', 'Documents', 'Desktop', 'Pictures']
 
   const fileCount = duplicates?.groups.reduce((n, g) => n + g.files.length, 0) ?? 0
 
@@ -55,9 +60,35 @@ export default function DuplicatesView(): React.JSX.Element {
           </div>
           <p className="max-w-[300px] text-[12px] leading-relaxed text-[var(--sift-text-muted)]">
             The oldest copy is kept by default. Choose another copy in a group to keep that one
-            instead. Trashed copies are recoverable.
+            instead. Copies moved to the {bin} are recoverable.
           </p>
         </section>
+      )}
+
+      {duplicates && duplicates.groups.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] px-4 py-2.5 text-[12.5px]">
+          <span className="text-[var(--sift-text-muted)]">Looked in {FOLDERS.join(', ')}.</span>
+          <span className="grow" />
+          <label htmlFor="keep-folder" className="text-[var(--sift-text-muted)]">
+            Keep the copy in
+          </label>
+          <select
+            id="keep-folder"
+            value={keepFolder}
+            onChange={(e) => {
+              setKeepFolder(e.target.value)
+              setKeepers({})
+            }}
+            className="rounded-md border border-[var(--sift-border)] bg-[var(--sift-bg)] px-2 py-1 text-[12.5px]"
+          >
+            <option value="">the oldest</option>
+            {FOLDERS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       {duplicates?.permissionDenied && (
@@ -82,9 +113,11 @@ export default function DuplicatesView(): React.JSX.Element {
 
       <div className="space-y-3">
         {duplicates?.groups.map((group) => {
-          const keeper = keepers[group.hash] ?? group.files[0]
+          const keeper =
+            keepers[group.hash] ?? keeperForRule(group.files, keepFolder) ?? group.files[0]
           const toTrash = group.files.filter((f) => f !== keeper)
           const chosen = keepers[group.hash] !== undefined && keeper !== group.files[0]
+          const ruled = keepers[group.hash] === undefined && keeper !== group.files[0]
           return (
             <fieldset
               key={group.hash}
@@ -106,7 +139,7 @@ export default function DuplicatesView(): React.JSX.Element {
                   disabled={toTrash.length === 0}
                   className="rounded-lg bg-[var(--sift-review)] px-3 py-1.5 text-[12.5px] font-medium text-black disabled:opacity-40"
                 >
-                  Move {toTrash.length} to Trash
+                  Move {toTrash.length} to {bin}
                 </button>
               </div>
               <ul className="divide-y divide-[var(--sift-border)]">
@@ -152,8 +185,10 @@ export default function DuplicatesView(): React.JSX.Element {
                           {isKeeper
                             ? chosen
                               ? 'Keep · you chose this'
-                              : 'Keep · oldest'
-                            : 'Moves to Trash'}
+                              : ruled
+                                ? `Keep · in ${keepFolder}`
+                                : 'Keep · oldest'
+                            : `Moves to ${bin}`}
                         </div>
                       </label>
                       <button

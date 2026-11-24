@@ -14,8 +14,9 @@ import type {
   ScanSummary
 } from '@shared/types'
 import { formatBytes } from './lib/format'
+import { bin } from './lib/platform'
 
-export type View = 'dashboard' | 'duplicates' | 'explore' | 'ai-apps' | 'hidden'
+export type View = 'dashboard' | 'duplicates' | 'explore' | 'ai-apps' | 'hidden' | 'review'
 
 interface ScanProgress {
   label: string
@@ -40,6 +41,7 @@ interface SiftState {
   hasApiKey: boolean
   hasClaudeCli: boolean
   settingsOpen: boolean
+  paletteOpen: boolean
   activeView: View
   toast: string | null
   permissions: AccessCheck[] | null
@@ -66,6 +68,7 @@ interface SiftState {
   setHasApiKey: (v: boolean) => void
   setHasClaudeCli: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
+  setPaletteOpen: (v: boolean) => void
   setActiveView: (v: View) => void
   toggleSelected: (path: string) => void
   clearSelected: () => void
@@ -91,6 +94,7 @@ interface SiftState {
   refreshScanHistory: () => Promise<void>
   askAi: (question: string) => Promise<void>
   loadCachedSummary: () => Promise<void>
+  loadAiBrief: () => Promise<string>
   loadScanPreferences: () => Promise<void>
   saveScanPreferences: (prefs: Partial<ScanPreferences>) => Promise<void>
   loadCategoryDefs: () => Promise<void>
@@ -127,6 +131,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   hasApiKey: false,
   hasClaudeCli: false,
   settingsOpen: false,
+  paletteOpen: false,
   activeView: 'dashboard',
   toast: null,
   permissions: null,
@@ -202,6 +207,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
   setHasApiKey: (v): void => set({ hasApiKey: v }),
   setHasClaudeCli: (v): void => set({ hasClaudeCli: v }),
   setSettingsOpen: (v): void => set({ settingsOpen: v }),
+  setPaletteOpen: (v): void => set({ paletteOpen: v }),
   setActiveView: (v): void => set({ activeView: v }),
 
   toggleSelected: (path): void => {
@@ -349,7 +355,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
         `Moved ${result.succeeded.length}, failed ${result.failed.length}${sample ? ` — ${sample}` : ''}`
       )
     } else {
-      get().showToast(`Moved ${result.succeeded.length} item(s) to Trash`)
+      get().showToast(`Moved ${result.succeeded.length} item(s) to ${bin}`)
     }
 
     const trashedSet = new Set(result.succeeded)
@@ -424,10 +430,10 @@ export const useSiftStore = create<SiftState>((set, get) => ({
           }
         }
       })
-      get().showToast(`Emptied Trash · freed ${formatBytes(result.freedBytes)}`)
+      get().showToast(`Emptied ${bin} · freed ${formatBytes(result.freedBytes)}`)
       get().refreshClearHistory()
     } catch (err) {
-      get().showToast(err instanceof Error ? err.message : 'Could not empty Trash')
+      get().showToast(err instanceof Error ? err.message : `Could not empty ${bin}`)
     }
   },
 
@@ -522,6 +528,15 @@ export const useSiftStore = create<SiftState>((set, get) => ({
     } catch (err) {
       set({ isAskingAi: false })
       get().showToast(err instanceof Error ? err.message : 'Could not ask Claude')
+    }
+  },
+
+  loadAiBrief: async (): Promise<string> => {
+    try {
+      return await window.api.aiBrief()
+    } catch (err) {
+      get().showToast(err instanceof Error ? err.message : 'Could not load the Claude preview')
+      return ''
     }
   },
 

@@ -1,6 +1,8 @@
 import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import type { CategoryDef } from '../shared/types'
+import { platform } from './platform'
+import { windowsCategoryDefs } from './categories.win'
 
 const home = homedir()
 const h = (...parts: string[]): string => join(home, ...parts)
@@ -12,7 +14,7 @@ const h = (...parts: string[]): string => join(home, ...parts)
  *  - caution: usually fine, but skim the list before clearing
  *  - review: could contain user data (old downloads, big files) — look first
  */
-export const CATEGORY_DEFS: CategoryDef[] = [
+const MAC_CATEGORY_DEFS: CategoryDef[] = [
   {
     id: 'user-caches',
     label: 'App Caches',
@@ -229,5 +231,15 @@ export const CATEGORY_DEFS: CategoryDef[] = [
     minAgeDays: 180
   }
 ]
+
+/** The scan targets for the OS we are running on. */
+export const CATEGORY_DEFS: CategoryDef[] =
+  platform === 'win'
+    ? windowsCategoryDefs({
+        home,
+        localAppData: process.env.LOCALAPPDATA ?? h('AppData', 'Local'),
+        tmp: tmpdir()
+      })
+    : MAC_CATEGORY_DEFS
 
 export const DEV_SEARCH_ROOTS = [h('Desktop'), h('Documents'), h('Developer'), h('Projects'), h('dev'), home]

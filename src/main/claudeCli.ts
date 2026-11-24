@@ -1,9 +1,39 @@
 import { execFile } from 'child_process'
+import { promises as fs } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
 import { run } from './exec'
+import { platform } from './platform'
 
 const CLI_TIMEOUT_MS = 60_000
 
 let cachedPath: string | null | undefined // undefined = not yet resolved this process
+
+/**
+ * `where claude` can list several shims (claude, claude.cmd, claude.exe). Only a real .exe is
+ * safe to run: a .cmd needs a shell, and the prompt text would then be parsed by cmd.exe.
+ */
+export function pickWindowsClaudePath(whereOutput: string): string | null {
+  const lines = whereOutput
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  return lines.find((l) => l.toLowerCase().endsWith('.exe')) ?? null
+}
+
+async function findClaudeCliPathWindows(): Promise<string | null> {
+  const { stdout } = await run('where.exe', ['claude'])
+  const found = pickWindowsClaudePath(stdout)
+  if (found) return found
+  // The native installer's default location, for when the GUI's PATH is missing it.
+  const known = join(homedir(), '.local', 'bin', 'claude.exe')
+  try {
+    await fs.access(known)
+    return known
+  } catch {
+    return null
+  }
+}
 
 /**
  * GUI apps launched from the Dock/Finder get a minimal PATH that usually doesn't include
@@ -13,6 +43,11 @@ let cachedPath: string | null | undefined // undefined = not yet resolved this p
  */
 async function findClaudeCliPath(): Promise<string | null> {
   if (cachedPath !== undefined) return cachedPath
+
+  if (platform === 'win') {
+    cachedPath = await findClaudeCliPathWindows()
+    return cachedPath
+  }
 
   try {
     const { stdout, code } = await run('which', ['claude'])

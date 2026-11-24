@@ -32,15 +32,23 @@ empty it yourself. The few actions that are permanent are called out in
 
 ### Find and clear space
 
-- **Top actions.** A single ranked list on the Dashboard, sorted by space freed
-  and how confident Sift is that it is safe, so you do not have to hunt through
-  categories for the biggest win.
+- **Overview.** The headline shows how much can go and how much of it rebuilds
+  itself. Categories are grouped under *Comes back on its own*, *Look before you
+  clear* and *Your files. Sift only points.*
 - **Risk labels.** Every category is marked `safe`, `caution` or `review`, so you
   know before you clear.
-- **Explore.** Drill into categories and folders with size-sorted children,
-  checkboxes and indent guides.
+- **Review before clearing.** Selected items are grouped by what they cost to get
+  back. If any item is one of your own files, *Move to Trash* stays locked until
+  you tick that you have checked them. A native confirmation still runs first.
+- **Explore.** Drill into categories and folders with size-sorted children and
+  checkboxes. Click a category to open the **Know** panel: what it is, what
+  happens if you clear it, and when it was last touched.
 - **Duplicate finder.** Finds exact-content duplicates in Desktop, Documents,
-  Downloads and Pictures. Pick which copy to keep and trash the rest.
+  Downloads and Pictures. Keep the copy in a folder you choose, or keep the
+  oldest, and trash the rest.
+- **Command palette.** Press ⌘K to jump to a section, open Settings, rescan,
+  select a category for clearing, or ask Claude. ⌘1–5 switch sections and ⌘,
+  opens Settings.
 - **Ignore list.** Mark an item as ignored and it will not come back on the next
   scan. Manage the list from Settings.
 - **Clear history.** Every clear is logged with date, item count and bytes
@@ -62,6 +70,8 @@ space is hiding and lets you reclaim it without rebooting:
   size and last-used date, and delete the ones you no longer test on.
 - **Time Machine local snapshots.** See and delete on-disk restore points.
 - **Temporary files.** The per-user temp folder is scanned as its own category.
+- **Before and after.** Bars compare free space now, after a restart, and after
+  a restart plus cleanup.
 
 ### Track your AI apps
 
@@ -88,7 +98,8 @@ running and can quit it before you clear.
   macOS permission prompts never appear without context.
 - **Menu bar companion.** A menu bar item shows reclaimable space at a glance,
   rescans in the background every few hours, and lets you scan or quit without
-  opening the window.
+  opening the window. Its menu lists free space, the three biggest categories,
+  and a warning when the last scan could not read some folders.
 - **Light on memory in the background.** Closing the window fully closes its
   renderer process and hides the Dock icon, so Sift sits in the menu bar using
   very little memory until you reopen it.
@@ -103,6 +114,9 @@ running and can quit it before you clear.
   automatically.
 - **Works fully offline.** Without Claude, Sift falls back to a transparent
   rule-based summary and tells you so.
+- **See what Claude sees.** Settings → Claude shows the exact text sent to
+  Claude: category labels, sizes, counts and up to 8 item names. No paths and
+  no file contents.
 
 ### Permission-aware scanning
 
@@ -131,6 +145,14 @@ pnpm dist:mac
 Because the build is not notarized, macOS may warn that it cannot verify the
 developer the first time you open it. Right-click Sift in Applications, choose
 **Open**, then confirm.
+
+### Windows (preview)
+
+Sift picks its scanner from the OS it runs on. On Windows it scans caches, temp files,
+crash dumps, package manager caches, old downloads, disk images, large files and stale
+project folders, and sends cleared items to the Recycle Bin. AI apps and Restart space are
+macOS only and are hidden. The installer is built with `pnpm dist:win` and has not been run
+on a real Windows machine yet.
 
 ### First run
 
@@ -213,7 +235,7 @@ pnpm dev          # run the app with hot reload
 ```bash
 pnpm typecheck    # tsc, main + renderer
 pnpm lint         # eslint
-pnpm test         # vitest unit tests
+pnpm test         # vitest unit tests (pure logic only; no component tests)
 pnpm build        # typecheck + production bundle
 pnpm dist:mac     # build, package, and install Sift.app to /Applications
 ```

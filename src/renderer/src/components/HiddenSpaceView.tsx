@@ -35,6 +35,7 @@ export default function HiddenSpaceView(): React.JSX.Element {
   const deleteSnapshots = useSiftStore((s) => s.deleteSnapshots)
   const deleteRuntime = useSiftStore((s) => s.deleteSimulatorRuntime)
   const setActiveView = useSiftStore((s) => s.setActiveView)
+  const summary = useSiftStore((s) => s.summary)
 
   useEffect(() => {
     if (!report) run()
@@ -62,6 +63,49 @@ export default function HiddenSpaceView(): React.JSX.Element {
           {isScanning ? 'Scanning…' : 'Rescan'}
         </button>
       </header>
+
+      {report && (
+        <p className="text-[32px] font-semibold leading-tight tracking-tight tabular-nums">
+          {formatBytes(report.heldDeletedBytes + report.swapUsedBytes)} is held, not stored
+        </p>
+      )}
+
+      {report && summary?.volumes?.[0] && (
+        <section
+          aria-label="Free space before and after"
+          className="space-y-2.5 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-5"
+        >
+          {(() => {
+            const vol = summary.volumes[0]
+            const afterRestart = vol.freeBytes + report.swapUsedBytes + report.heldDeletedBytes
+            const withCleanup = afterRestart + summary.reclaimableBytes
+            return [
+              ['Free now', vol.freeBytes, '#3a4152'],
+              ['After restart', afterRestart, 'var(--sift-text)'],
+              ['And with cleanup', withCleanup, 'var(--sift-safe)']
+            ].map(([label, bytes, color]) => (
+              <div
+                key={label as string}
+                className="grid grid-cols-[110px_1fr_80px] items-center gap-3"
+              >
+                <span className="text-[12.5px] text-[var(--sift-text-muted)]">{label}</span>
+                <div className="h-3.5 overflow-hidden rounded bg-[#1e222c]">
+                  <div
+                    className="h-full rounded"
+                    style={{
+                      width: `${Math.min(100, ((bytes as number) / vol.totalBytes) * 100)}%`,
+                      background: color as string
+                    }}
+                  />
+                </div>
+                <span className="text-right text-[12.5px] tabular-nums">
+                  {formatBytes(bytes as number)}
+                </span>
+              </div>
+            ))
+          })()}
+        </section>
+      )}
 
       {report && (
         <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -95,7 +139,7 @@ export default function HiddenSpaceView(): React.JSX.Element {
         <>
           <Section
             title="Deleted files still held open"
-            detail={`${formatBytes(report.heldDeletedBytes)} — emptying Trash doesn't free this until the app holding it quits.`}
+            detail={`${formatBytes(report.heldDeletedBytes)} — emptying the Trash doesn't free this until the app holding it quits.`}
           >
             {report.heldDeleted.length === 0 ? (
               <Empty text="No large deleted-but-open files right now." />

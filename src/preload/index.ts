@@ -1,3 +1,4 @@
+import { detectPlatform } from '../shared/platform'
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
@@ -24,6 +25,7 @@ function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
 }
 
 const api = {
+  platform: detectPlatform(process.platform),
   scan: (onProgress: (p: { label: string; done: number; total: number }) => void): Promise<ScanSummary> => {
     const listener = (_event: unknown, payload: { label: string; done: number; total: number }): void =>
       onProgress(payload)
@@ -50,6 +52,7 @@ const api = {
     ipcRenderer.invoke('sift:askAi', summary, question),
   hasApiKey: (): Promise<boolean> => ipcRenderer.invoke('sift:hasApiKey'),
   hasClaudeCli: (): Promise<boolean> => ipcRenderer.invoke('sift:hasClaudeCli'),
+  aiBrief: (): Promise<string> => ipcRenderer.invoke('sift:aiBrief'),
   setApiKey: (key: string): Promise<void> => ipcRenderer.invoke('sift:setApiKey', key),
   clearApiKey: (): Promise<void> => ipcRenderer.invoke('sift:clearApiKey'),
   confirmTrash: (count: number, sizeLabel: string): Promise<boolean> =>

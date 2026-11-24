@@ -20,6 +20,16 @@ mac:
     - NSDesktopFolderUsageDescription: Sift scans your Desktop to find large or old files you may want to clear.
     - NSPicturesFolderUsageDescription: Sift scans your Pictures folder to find large media and Photos libraries you may want to review.
   notarize: false
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${name}-${version}-setup.${ext}
 dmg:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false

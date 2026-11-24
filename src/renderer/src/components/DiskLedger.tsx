@@ -1,6 +1,7 @@
 import { useSiftStore } from '../store'
 import { formatBytes } from '../lib/format'
 import { riskTotals } from '@shared/reclaimable'
+import { bin } from '../lib/platform'
 
 const SEGMENTS = [
   { risk: 'safe', label: 'Safe', note: 'Rebuilt on demand', color: 'var(--sift-safe)' },
@@ -67,7 +68,7 @@ export default function DiskLedger(): React.JSX.Element | null {
               Clear {formatBytes(safeTotal)} marked safe…
             </button>
             <span className="text-[11.5px] text-[var(--sift-text-muted)]">
-              Moves to Trash. Recoverable until you empty it.
+              Moves to {bin}. Recoverable until you empty it.
             </span>
           </div>
         )}
@@ -101,7 +102,7 @@ export default function DiskLedger(): React.JSX.Element | null {
         <div className="flex flex-col gap-0.5">
           <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--sift-text-muted)]">
             <span className="size-2 rounded-sm bg-[#3a4152]" />
-            Trash
+            {bin}
           </span>
           <span className="text-[15px] font-semibold tabular-nums">
             {formatBytes(trash?.totalSizeBytes ?? 0)}
