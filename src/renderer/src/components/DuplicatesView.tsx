@@ -40,6 +40,35 @@ export default function DuplicatesView(): React.JSX.Element {
         </button>
       </header>
 
+      {!duplicates && !isScanningDuplicates && (
+        <ul className="divide-y divide-[var(--sift-border)] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)]">
+          <li className="px-4 py-2.5">
+            <div className="text-[13px] font-medium">What a scan reads</div>
+            <div className="text-[12.5px] text-[var(--sift-text-muted)]">
+              {FOLDERS.join(', ')}. Files are compared by size, then by content.
+            </div>
+          </li>
+          <li className="px-4 py-2.5">
+            <div className="text-[13px] font-medium">macOS may ask for folder access</div>
+            <div className="text-[12.5px] text-[var(--sift-text-muted)]">
+              Say no and Sift skips that folder, and tells you.
+            </div>
+          </li>
+          <li className="px-4 py-2.5">
+            <div className="text-[13px] font-medium">One copy always stays</div>
+            <div className="text-[12.5px] text-[var(--sift-text-muted)]">
+              The other copies go to the {bin}, recoverable until you empty it.
+            </div>
+          </li>
+        </ul>
+      )}
+
+      {isScanningDuplicates && (
+        <p aria-live="polite" className="text-[12.5px] text-[var(--sift-text-muted)]">
+          Scanning…
+        </p>
+      )}
+
       {duplicates && (
         <section
           aria-labelledby="dup-sum"

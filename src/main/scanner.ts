@@ -19,6 +19,7 @@ import {
   dedupeOverlappingCategoryPaths
 } from '../shared/reclaimable'
 import { normalizeScanPreferences } from '../shared/preferences'
+import { stepResultFromCategory, type StepResult } from '../shared/scanProgress'
 import {
   ARTIFACT_DIR_NAMES,
   artifactKind,
@@ -666,7 +667,7 @@ async function scanRecycleBin(def: (typeof CATEGORY_DEFS)[number]): Promise<Cate
 }
 
 async function doFullScan(
-  onProgress?: (label: string, done: number, total: number) => void,
+  onProgress?: (label: string, done: number, total: number, last?: StepResult) => void,
   ignoredPaths: string[] = [],
   prefsInput?: ScanPreferences
 ): Promise<ScanSummary> {
@@ -684,41 +685,44 @@ async function doFullScan(
     allShallow.length + (includeLarge ? 1 : 0) + (includeNode ? 1 : 0) + (includeDmgs ? 1 : 0)
   let done = 0
   const results: CategoryResult[] = []
+  // With Full Disk Access, leftover EPERMs are SIP items, so they must not read as "not allowed".
+  const fda = await hasFullDiskAccess()
+  let last: StepResult | undefined
+  const finish = (r: CategoryResult): void => {
+    results.push(r)
+    last = stepResultFromCategory({ ...r, permissionDenied: r.permissionDenied && !fda })
+    done++
+  }
 
   for (const def of [...priorityShallow, ...restShallow]) {
     throwIfCancelled()
-    onProgress?.(def.label, done, totalSteps)
+    onProgress?.(def.label, done, totalSteps, last)
     const minAge = resolveMinAgeDays(def.id, def.minAgeDays, prefs)
     if (platform === 'win' && def.id === 'trash') {
-      results.push(await scanRecycleBin(def))
-      done++
+      finish(await scanRecycleBin(def))
       continue
     }
-    results.push(
+    finish(
       await scanShallowCategory(def.id, def.label, def.description, def.risk, def.paths, minAge)
     )
-    done++
   }
 
   if (includeDmgs) {
     throwIfCancelled()
-    onProgress?.('Old Disk Images', done, totalSteps)
-    results.push(await scanOrphanedDmgs())
-    done++
+    onProgress?.('Old Disk Images', done, totalSteps, last)
+    finish(await scanOrphanedDmgs())
   }
 
   if (includeLarge) {
     throwIfCancelled()
-    onProgress?.('Large & Unused Files', done, totalSteps)
-    results.push(await scanLargeFiles(prefs))
-    done++
+    onProgress?.('Large & Unused Files', done, totalSteps, last)
+    finish(await scanLargeFiles(prefs))
   }
 
   if (includeNode) {
     throwIfCancelled()
-    onProgress?.('Stale project artefacts', done, totalSteps)
-    results.push(await scanStaleArtifacts())
-    done++
+    onProgress?.('Stale project artefacts', done, totalSteps, last)
+    finish(await scanStaleArtifacts())
   }
 
   // Keep disabled categories visible as empty so UI/settings stay consistent.
@@ -729,7 +733,7 @@ async function doFullScan(
   }
 
   // With Full Disk Access, leftover EPERMs come from SIP-protected items, not a missing grant.
-  if (await hasFullDiskAccess()) {
+  if (fda) {
     for (const r of results) r.permissionDenied = false
   }
 
@@ -752,7 +756,7 @@ async function doFullScan(
  * background rescan cannot race a user-initiated Dashboard scan.
  */
 export async function runFullScan(
-  onProgress?: (label: string, done: number, total: number) => void,
+  onProgress?: (label: string, done: number, total: number, last?: StepResult) => void,
   ignoredPaths: string[] = [],
   prefs?: ScanPreferences
 ): Promise<ScanSummary> {

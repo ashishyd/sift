@@ -4,13 +4,27 @@ import type { CategoryResult, RiskLevel, ScanItem } from '@shared/types'
 import { categoryHiddenStats } from '@shared/preferences'
 import { formatBytes, formatRelativeDate } from '../lib/format'
 import { useSiftStore } from '../store'
+import PermissionsBanner from './PermissionsBanner'
 import { bin } from '../lib/platform'
+import { matchesExploreFilter, newestModified, type ExploreFilter } from '../lib/explore'
 
 const RISK_BG: Record<RiskLevel, string> = {
   safe: 'bg-[var(--sift-safe)]',
   caution: 'bg-[var(--sift-caution)]',
   review: 'bg-[var(--sift-review)]'
 }
+
+const RISK_TILE: Record<RiskLevel, string> = {
+  safe: 'bg-[var(--sift-safe)]/15 border-[var(--sift-safe)]/40',
+  caution: 'bg-[var(--sift-caution)]/15 border-[var(--sift-caution)]/40',
+  review: 'bg-[var(--sift-review)]/15 border-[var(--sift-review)]/40'
+}
+
+const FILTERS: { id: ExploreFilter; label: string }[] = [
+  { id: 'all', label: 'Everything' },
+  { id: 'clearable', label: 'Clearable' },
+  { id: 'untouched', label: 'Oldest items 90+ days' }
+]
 
 const RISK_LABEL: Record<RiskLevel, string> = {
   safe: 'Safe to clear',
@@ -176,11 +190,13 @@ function ItemNode({
 
 function CategoryRow({
   category,
+  totalBytes,
   expanded,
   onToggleExpand,
   onFocus
 }: {
   category: CategoryResult
+  totalBytes: number
   expanded: boolean
   onToggleExpand: () => void
   onFocus: () => void
@@ -192,6 +208,8 @@ function CategoryRow({
   const allSelected = selectedCount === paths.length && paths.length > 0
   const someSelected = selectedCount > 0 && !allSelected
   const hidden = categoryHiddenStats(category)
+  const share =
+    totalBytes > 0 ? Math.min(100, Math.round((category.totalSizeBytes / totalBytes) * 100)) : 0
 
   return (
     <div className="flex items-center gap-2 py-2 pr-2 rounded-lg hover:bg-white/[0.03]">
@@ -224,8 +242,18 @@ function CategoryRow({
         {category.matchedItemCount ?? category.items.length} item(s)
         {hidden.count > 0 ? ` · ${category.items.length} listed` : ''}
       </span>
+      <div
+        role="img"
+        aria-label={`${share}% of listed`}
+        className="h-1 w-[100px] shrink-0 overflow-hidden rounded-full bg-[#1e222c]"
+      >
+        <div className="h-1 bg-[var(--sift-accent)]" style={{ width: `${share}%` }} />
+      </div>
       <span className="text-[13px] font-semibold tabular-nums w-20 text-right shrink-0">
         {formatBytes(category.totalSizeBytes)}
+      </span>
+      <span className="text-[12px] tabular-nums text-[var(--sift-text-muted)] w-20 text-right shrink-0">
+        {formatRelativeDate(newestModified(category))}
       </span>
     </div>
   )
@@ -292,10 +320,11 @@ export default function FolderTree(): React.JSX.Element {
   const isScanning = useSiftStore((s) => s.isScanning)
   const selected = useSiftStore((s) => s.selected)
   const clearSelected = useSiftStore((s) => s.clearSelected)
-  const trashSelected = useSiftStore((s) => s.trashSelected)
+  const setActiveView = useSiftStore((s) => s.setActiveView)
   const emptyTrash = useSiftStore((s) => s.emptyTrash)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<ExploreFilter>('all')
 
   if (!summary) {
     return (
@@ -336,7 +365,11 @@ export default function FolderTree(): React.JSX.Element {
     })
   }
 
-  const allExpanded = categories.every((c) => expanded.has(c.id))
+  // Trash has its own Empty button, so it stays out of the tiles, totals and filters.
+  const visible = categories.filter((c) => c.id !== 'trash' && matchesExploreFilter(c, filter))
+  const visibleBytes = visible.reduce((s, c) => s + c.totalSizeBytes, 0)
+  const tiles = visible.slice(0, 6)
+  const allExpanded = visible.length > 0 && visible.every((c) => expanded.has(c.id))
   const sizeMap = new Map<string, number>()
   categories.forEach((c) => c.items.forEach((i) => sizeMap.set(i.path, i.sizeBytes)))
   const selectedBytes = Array.from(selected).reduce((s, p) => s + (sizeMap.get(p) ?? 0), 0)
@@ -361,9 +394,7 @@ export default function FolderTree(): React.JSX.Element {
             ))}
           </div>
           <button
-            onClick={() =>
-              setExpanded(allExpanded ? new Set() : new Set(categories.map((c) => c.id)))
-            }
+            onClick={() => setExpanded(allExpanded ? new Set() : new Set(visible.map((c) => c.id)))}
             className="rounded-lg border border-[var(--sift-border)] px-3 py-1.5 text-[12.5px] hover:bg-white/5"
           >
             {allExpanded ? 'Collapse all' : 'Expand all'}
@@ -371,15 +402,79 @@ export default function FolderTree(): React.JSX.Element {
         </div>
       </header>
 
+      <PermissionsBanner />
+
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            aria-pressed={filter === f.id}
+            className={clsx(
+              'rounded-lg px-3 py-1.5 text-[12.5px]',
+              filter === f.id
+                ? 'bg-[var(--sift-accent-soft)] font-medium text-[var(--sift-accent)]'
+                : 'text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]'
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {tiles.length > 0 && (
+        <div
+          className="grid gap-1.5"
+          style={{
+            // Floor each tile at 8% of the total so tiny categories stay clickable.
+            gridTemplateColumns: tiles
+              .map((c) => `minmax(0, ${Math.max(c.totalSizeBytes, visibleBytes * 0.08, 1)}fr)`)
+              .join(' ')
+          }}
+        >
+          {tiles.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => {
+                setFocusId(c.id)
+                setExpanded((prev) => new Set(prev).add(c.id))
+              }}
+              title={`${c.label} · ${RISK_LABEL[c.risk]}`}
+              className={clsx(
+                'flex h-24 min-w-0 flex-col justify-between rounded-lg border p-2.5 text-left hover:brightness-125',
+                RISK_TILE[c.risk]
+              )}
+            >
+              <span className="truncate text-[12px] font-medium">{c.label}</span>
+              <span className="text-[13px] font-semibold tabular-nums">
+                {formatBytes(c.totalSizeBytes)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start gap-4">
         <div className="min-w-0 flex-[999_1_420px] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-2">
-          {categories.map((category) => {
+          <div className="flex items-center gap-2 pr-2 pb-1 text-[11px] text-[var(--sift-text-muted)]">
+            <span className="flex-1">Name</span>
+            <span className="w-[100px] shrink-0">Share</span>
+            <span className="w-20 shrink-0 text-right">Size</span>
+            <span className="w-20 shrink-0 text-right">Last touched</span>
+          </div>
+          {visible.length === 0 && (
+            <p className="px-2 py-3 text-[12.5px] text-[var(--sift-text-muted)]">
+              No categories match this filter.
+            </p>
+          )}
+          {visible.map((category) => {
             const isExpanded = expanded.has(category.id)
             const hidden = categoryHiddenStats(category)
             return (
               <div key={category.id}>
                 <CategoryRow
                   category={category}
+                  totalBytes={visibleBytes}
                   expanded={isExpanded}
                   onToggleExpand={() => toggleExpand(category.id)}
                   onFocus={() => setFocusId(category.id)}
@@ -443,10 +538,10 @@ export default function FolderTree(): React.JSX.Element {
               Deselect
             </button>
             <button
-              onClick={trashSelected}
+              onClick={() => setActiveView('review')}
               className="rounded-lg bg-[var(--sift-review)] px-4 py-2 text-[12.5px] font-medium text-black"
             >
-              Move to {bin}
+              Review and move to {bin}
             </button>
           </div>
         </div>

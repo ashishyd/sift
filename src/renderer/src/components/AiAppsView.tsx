@@ -42,9 +42,19 @@ export default function AiAppsView(): React.JSX.Element {
     <div className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-0.5">
-          <h1 className="text-[16px] font-semibold">AI apps</h1>
+          <h1 className="text-[32px] font-semibold leading-tight tracking-tight tabular-nums">
+            {report ? (
+              <>
+                AI apps keep{' '}
+                <span className="text-[var(--sift-safe)]">{formatBytes(report.totalBytes)}</span>
+              </>
+            ) : (
+              'AI apps'
+            )}
+          </h1>
           <p className="text-[12.5px] text-[var(--sift-text-muted)]">
-            What Claude, Cursor and ChatGPT keep on disk, and how much of it can be cleared.
+            AI apps: what Claude, Cursor and ChatGPT keep on disk, and how much of it can be
+            cleared.
           </p>
         </div>
         <button
@@ -100,108 +110,147 @@ export default function AiAppsView(): React.JSX.Element {
         </section>
       )}
 
-      {report?.apps.map((app) => (
-        <section
-          key={app.id}
-          aria-labelledby={`app-${app.id}`}
-          className="overflow-hidden rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)]"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <h2 id={`app-${app.id}`} className="text-[15px] font-semibold">
-                  {app.label}
-                </h2>
-                {app.running && (
-                  <span className="rounded-full bg-[var(--sift-caution)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--sift-caution)]">
-                    Running
-                  </span>
-                )}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] items-start gap-4">
+        {report?.apps.map((app) => (
+          <section
+            key={app.id}
+            aria-labelledby={`app-${app.id}`}
+            className="overflow-hidden rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <h2 id={`app-${app.id}`} className="text-[15px] font-semibold">
+                    {app.label}
+                  </h2>
+                  {app.running && (
+                    <span className="rounded-full bg-[var(--sift-caution)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--sift-caution)]">
+                      Running
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                  {formatBytes(app.totalBytes)} total · {formatBytes(app.clearableBytes)} clearable
+                </p>
               </div>
-              <p className="text-[12.5px] text-[var(--sift-text-muted)]">
-                {formatBytes(app.totalBytes)} total · {formatBytes(app.clearableBytes)} clearable
-              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={app.clearableBytes === 0}
+                  onClick={() =>
+                    clear(
+                      app.components
+                        .filter((c) => c.clearable && c.risk === 'safe')
+                        .map((c) => c.path)
+                    )
+                  }
+                  className="rounded-lg bg-[var(--sift-accent-soft)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--sift-accent)] disabled:opacity-40"
+                >
+                  Clear safe items
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {app.running && app.runningProcessName && (
+            <div
+              role="img"
+              aria-label={`${app.label}: ${formatBytes(app.clearableBytes)} clearable, ${formatBytes(Math.max(app.totalBytes - app.clearableBytes, 0))} kept`}
+              className="mx-4 mb-3.5 flex h-1.5 gap-0.5 overflow-hidden rounded-full bg-[#1e222c]"
+            >
+              <div style={{ flex: `${app.clearableBytes} 1 0`, background: 'var(--sift-safe)' }} />
+              <div
+                style={{
+                  flex: `${Math.max(app.totalBytes - app.clearableBytes, 0)} 1 0`,
+                  background: '#3a4152'
+                }}
+              />
+            </div>
+            {app.running && app.runningProcessName && (
+              <div
+                role="status"
+                className="mx-4 mb-3.5 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-[var(--sift-caution)]/30 bg-[var(--sift-caution)]/10 px-3.5 py-2.5 text-[12.5px]"
+              >
+                <span>{app.runningProcessName} is running. Quit it to clear.</span>
                 <button
                   onClick={() => quitApp(app.runningProcessName!)}
-                  className="px-3 py-1.5 text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+                  className="font-medium text-[var(--sift-caution)] hover:underline"
                   title="Quit first so caches aren't rebuilt while you clear them"
                 >
                   Quit {app.runningProcessName}
                 </button>
-              )}
-              <button
-                disabled={app.clearableBytes === 0}
-                onClick={() =>
-                  clear(
-                    app.components
-                      .filter((c) => c.clearable && c.risk === 'safe')
-                      .map((c) => c.path)
-                  )
-                }
-                className="rounded-lg bg-[var(--sift-accent-soft)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--sift-accent)] disabled:opacity-40"
-              >
-                Clear safe items
-              </button>
-            </div>
-          </div>
-          {app.components.length === 0 ? (
-            <p className="border-t border-[var(--sift-border)] px-4 py-3 text-[12.5px] text-[var(--sift-text-muted)]">
-              Nothing found on disk.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[var(--sift-border)] border-t border-[var(--sift-border)]">
-              {app.components.map((c) => (
-                <li key={c.path} className="flex items-center gap-3 px-4 py-2.5">
-                  <input
-                    type="checkbox"
-                    id={`pick-${c.path}`}
-                    disabled={!c.clearable}
-                    checked={picked.has(c.path)}
-                    onChange={() => toggle(c.path)}
-                    className="accent-[var(--sift-accent)] shrink-0"
-                  />
-                  <label htmlFor={`pick-${c.path}`} className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          'truncate text-[13px] ' +
-                          (c.clearable ? '' : 'text-[var(--sift-text-muted)]')
-                        }
-                      >
-                        {c.label}
-                      </span>
-                      <RiskBadge risk={c.risk} />
-                      {!c.clearable && (
-                        <span className="text-[11px] text-[var(--sift-text-muted)]">
-                          <span aria-hidden="true">⚿ </span>Kept
+              </div>
+            )}
+            {app.components.length === 0 ? (
+              <p className="border-t border-[var(--sift-border)] px-4 py-3 text-[12.5px] text-[var(--sift-text-muted)]">
+                Nothing found on disk.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[var(--sift-border)] border-t border-[var(--sift-border)]">
+                {app.components.map((c) => (
+                  <li key={c.path} className="flex items-center gap-3 px-4 py-2.5">
+                    <input
+                      type="checkbox"
+                      id={`pick-${c.path}`}
+                      disabled={!c.clearable}
+                      checked={picked.has(c.path)}
+                      onChange={() => toggle(c.path)}
+                      className="accent-[var(--sift-accent)] shrink-0"
+                    />
+                    <label htmlFor={`pick-${c.path}`} className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={
+                            'truncate text-[13px] ' +
+                            (c.clearable ? '' : 'text-[var(--sift-text-muted)]')
+                          }
+                        >
+                          {c.label}
                         </span>
-                      )}
-                    </div>
-                    <p
-                      className="truncate text-[11.5px] text-[var(--sift-text-muted)]"
-                      title={c.description}
+                        <RiskBadge risk={c.risk} />
+                        {!c.clearable && (
+                          <span className="text-[11px] text-[var(--sift-text-muted)]">
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 16 16"
+                              className="mr-1 inline size-3 align-[-1px]"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            >
+                              <rect x="3" y="7" width="10" height="7" rx="1.5" />
+                              <path d="M5 7V5a3 3 0 0 1 6 0v2" />
+                            </svg>
+                            Kept
+                          </span>
+                        )}
+                      </div>
+                      <p
+                        className="truncate text-[11.5px] text-[var(--sift-text-muted)]"
+                        title={c.description}
+                      >
+                        {c.description}
+                      </p>
+                    </label>
+                    <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--sift-text-muted)]">
+                      {formatBytes(c.sizeBytes)}
+                    </span>
+                    <button
+                      onClick={() => window.api.revealInFinder(c.path)}
+                      className="shrink-0 text-[11.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
                     >
-                      {c.description}
-                    </p>
-                  </label>
-                  <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--sift-text-muted)]">
-                    {formatBytes(c.sizeBytes)}
-                  </span>
-                  <button
-                    onClick={() => window.api.revealInFinder(c.path)}
-                    className="shrink-0 text-[11.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
-                  >
-                    Reveal
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ))}
+                      Reveal
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
+      </div>
+
+      {report && (
+        <p className="text-[11.5px] text-[var(--sift-text-muted)]">
+          Why is so much kept? Chats, logins and settings are yours, so Sift never offers them. Only
+          caches that the app rebuilds are clearable.
+        </p>
+      )}
 
       {picked.size > 0 && (
         <div

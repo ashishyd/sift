@@ -1,14 +1,17 @@
+import { useState } from 'react'
 import { useSiftStore } from '../store'
 import { formatBytes } from '../lib/format'
 import { riskTotals } from '@shared/reclaimable'
 import type { RiskLevel } from '@shared/types'
+import type { StepResult } from '@shared/scanProgress'
+import RiskBadge from './RiskBadge'
 import DiskLedger from './DiskLedger'
 import GrowthCard from './GrowthCard'
 import CategoryCard from './CategoryCard'
 import VolumesList from './VolumesList'
 import AiPanel from './AiPanel'
 import PermissionsBanner from './PermissionsBanner'
-import { bin } from '../lib/platform'
+import { bin, isMac } from '../lib/platform'
 
 const GROUPS: { risk: RiskLevel; title: string; hint: string; color: string }[] = [
   {
@@ -31,19 +34,81 @@ const GROUPS: { risk: RiskLevel; title: string; hint: string; color: string }[] 
   }
 ]
 
+const MIX: Record<RiskLevel, { bg: string; text: string; label: (n: number) => string }> = {
+  safe: {
+    bg: 'bg-[var(--sift-safe)]',
+    text: 'text-[var(--sift-safe)]',
+    label: (n) => (n === 1 ? 'rebuilds itself' : 'rebuild themselves')
+  },
+  caution: {
+    bg: 'bg-[var(--sift-caution)]',
+    text: 'text-[var(--sift-caution)]',
+    label: () => 'to check'
+  },
+  review: {
+    bg: 'bg-[var(--sift-review)]',
+    text: 'text-[var(--sift-review)]',
+    label: (n) => (n === 1 ? 'your file' : 'your files')
+  }
+}
+
+const STEP_LABEL: Record<StepResult['state'], string> = {
+  found: '',
+  empty: 'Empty',
+  missing: 'Not on this machine',
+  denied: 'Not allowed'
+}
+
+function StepRow({ result }: { result: StepResult }): React.JSX.Element {
+  const warn = result.state === 'denied' || result.partial
+  return (
+    <li className="flex items-center gap-2.5 px-4 py-2.5 text-[12.5px]">
+      <span
+        aria-hidden="true"
+        className={
+          'w-3.5 text-center ' +
+          (warn ? 'text-[var(--sift-caution)]' : 'text-[var(--sift-text-muted)]')
+        }
+      >
+        {warn ? '⚠' : result.state === 'found' ? '✓' : '–'}
+      </span>
+      <span
+        className={
+          'grow truncate ' + (result.state === 'found' ? '' : 'text-[var(--sift-text-muted)]')
+        }
+      >
+        {result.label}
+      </span>
+      <span
+        className={
+          'tabular-nums ' + (warn ? 'text-[var(--sift-caution)]' : 'text-[var(--sift-text-muted)]')
+        }
+      >
+        {result.state === 'found'
+          ? `${formatBytes(result.sizeBytes)}${result.partial ? ' · partly read' : ''}`
+          : STEP_LABEL[result.state]}
+      </span>
+    </li>
+  )
+}
+
 export default function Dashboard(): React.JSX.Element {
   const summary = useSiftStore((s) => s.summary)
   const isScanning = useSiftStore((s) => s.isScanning)
   const progress = useSiftStore((s) => s.progress)
   const scanLog = useSiftStore((s) => s.scanLog)
+  const openPrivacySettings = useSiftStore((s) => s.openPrivacySettings)
   const runScan = useSiftStore((s) => s.runScan)
   const cancelScan = useSiftStore((s) => s.cancelScan)
   const autoScanning = useSiftStore((s) => s.autoScanning)
   const pendingSummary = useSiftStore((s) => s.pendingSummary)
   const applyPendingSummary = useSiftStore((s) => s.applyPendingSummary)
   const selected = useSiftStore((s) => s.selected)
+  const folderCache = useSiftStore((s) => s.folderCache)
   const setActiveView = useSiftStore((s) => s.setActiveView)
   const clearSelected = useSiftStore((s) => s.clearSelected)
+  const toggleSelected = useSiftStore((s) => s.toggleSelected)
+  const [openGroups, setOpenGroups] = useState<Set<RiskLevel>>(new Set())
 
   if (!summary && !isScanning) {
     return (
@@ -92,75 +157,99 @@ export default function Dashboard(): React.JSX.Element {
   }
 
   if (isScanning) {
+    const denied = scanLog.filter((r) => r.state === 'denied' || r.partial)
     return (
-      <section
-        aria-labelledby="scan-h"
-        className="max-w-[720px] space-y-4 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-5"
-      >
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-start gap-6">
+        <section aria-labelledby="scan-h" className="min-w-0 flex-[3_1_420px] space-y-4">
           <div className="space-y-1">
-            <h2 id="scan-h" className="text-[15px] font-semibold">
-              Scanning your Mac
-            </h2>
-            <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+            {progress && (
+              <p className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)]">
+                {progress.done} of {progress.total} categories read
+              </p>
+            )}
+            <h1 id="scan-h" className="text-[32px] font-semibold leading-tight tracking-tight">
+              Sifting your disk
+            </h1>
+            <p className="text-[13px] text-[var(--sift-text-muted)]">
               Reading sizes only. Nothing is moved until you choose.
             </p>
           </div>
-          {progress && (
-            <span className="text-[13px] tabular-nums text-[var(--sift-text-muted)]">
-              {progress.done} of {progress.total} places
-            </span>
-          )}
-        </div>
-        <div
-          role="progressbar"
-          aria-label="Scan progress"
-          aria-valuemin={0}
-          aria-valuemax={progress?.total ?? 0}
-          aria-valuenow={progress?.done ?? 0}
-          className="h-1.5 overflow-hidden rounded-full bg-[#1e222c]"
-        >
           <div
-            className="h-1.5 bg-[var(--sift-accent)]"
-            style={{
-              width:
-                progress && progress.total > 0 ? `${(progress.done / progress.total) * 100}%` : '0%'
-            }}
-          />
-        </div>
-        <ul className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
-          {[...scanLog, ...(progress ? [progress.label] : [])].map((label, idx) => {
-            const isDone = idx < scanLog.length
-            return (
-              <li
-                key={`${label}-${idx}`}
-                className={
-                  'flex items-center gap-2 border-b border-[var(--sift-border)] py-2 text-[12.5px] ' +
-                  (isDone ? 'text-[var(--sift-text-muted)]' : 'font-medium text-[var(--sift-text)]')
-                }
-              >
-                <span
-                  className={
-                    'w-3.5 text-center ' +
-                    (isDone ? 'text-[var(--sift-safe)]' : 'text-[var(--sift-accent)]')
-                  }
-                >
-                  {isDone ? '✓' : '›'}
+            role="progressbar"
+            aria-label="Scan progress"
+            aria-valuemin={0}
+            aria-valuemax={progress?.total ?? 0}
+            aria-valuenow={progress?.done ?? 0}
+            className="h-1.5 overflow-hidden rounded-full bg-[#1e222c]"
+          >
+            <div
+              className="h-1.5 bg-[var(--sift-accent)]"
+              style={{
+                width:
+                  progress && progress.total > 0
+                    ? `${(progress.done / progress.total) * 100}%`
+                    : '0%'
+              }}
+            />
+          </div>
+          {denied.length > 0 && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[var(--sift-caution)]/30 bg-[var(--sift-caution)]/10 px-3.5 py-2.5 text-[12.5px]"
+            >
+              <span>
+                <span aria-hidden="true" className="text-[var(--sift-caution)]">
+                  ⚠{' '}
                 </span>
-                {label}
+                {isMac ? 'macOS' : 'Windows'} refused access to{' '}
+                {denied.map((r) => r.label).join(', ')}. This scan will be marked incomplete.
+              </span>
+              <button
+                onClick={() => openPrivacySettings('files')}
+                className="font-medium text-[var(--sift-caution)] hover:underline"
+              >
+                Open privacy settings
+              </button>
+            </div>
+          )}
+          <ul className="divide-y divide-[var(--sift-border)] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)]">
+            {scanLog.map((r, idx) => (
+              <StepRow key={`${r.label}-${idx}`} result={r} />
+            ))}
+            {progress && (
+              <li className="flex items-center gap-2.5 px-4 py-2.5 text-[12.5px] font-medium">
+                <span aria-hidden="true" className="w-3.5 text-center text-[var(--sift-accent)]">
+                  ›
+                </span>
+                <span className="grow truncate">{progress.label}</span>
+                <span className="text-[var(--sift-text-muted)]">Reading…</span>
               </li>
-            )
-          })}
-        </ul>
-        <div className="flex justify-end">
+            )}
+          </ul>
           <button
             onClick={cancelScan}
-            className="rounded-lg border border-[var(--sift-border)] px-3.5 py-2 text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+            className="px-1 py-2 text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
           >
             Cancel scan
           </button>
-        </div>
-      </section>
+        </section>
+        <aside
+          aria-labelledby="wait-h"
+          className="min-w-0 flex-[1_1_240px] space-y-3 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-5"
+        >
+          <h2 id="wait-h" className="text-[15px] font-semibold">
+            While you wait
+          </h2>
+          <ul className="space-y-2.5 text-[12.5px] leading-relaxed">
+            <li>A scan only reads. Nothing moves until you press a button.</li>
+            <li>Everything you clear goes to the {bin} first. You can put it back.</li>
+            <li>Claude sees category names and sizes. Never paths or file contents.</li>
+          </ul>
+          <p className="text-[12px] text-[var(--sift-text-muted)]">
+            You can close this window. Sift keeps scanning from the {isMac ? 'menu bar' : 'tray'}.
+          </p>
+        </aside>
+      </div>
     )
   }
 
@@ -169,8 +258,34 @@ export default function Dashboard(): React.JSX.Element {
   const visibleCategories = summary.categories.filter((c) => !c.missing && c.items.length > 0)
   const sizeMap = new Map<string, number>()
   summary.categories.forEach((c) => c.items.forEach((i) => sizeMap.set(i.path, i.sizeBytes)))
+  Object.values(folderCache).forEach((l) =>
+    l.entries.forEach((i) => {
+      if (!sizeMap.has(i.path)) sizeMap.set(i.path, i.sizeBytes)
+    })
+  )
   const totals = riskTotals(summary.categories)
   const selectedBytes = Array.from(selected).reduce((s, p) => s + (sizeMap.get(p) ?? 0), 0)
+  const pathRisk = new Map<string, RiskLevel>()
+  summary.categories.forEach((c) => c.items.forEach((i) => pathRisk.set(i.path, c.risk)))
+  const mix: Record<RiskLevel, { count: number; bytes: number }> = {
+    safe: { count: 0, bytes: 0 },
+    caution: { count: 0, bytes: 0 },
+    review: { count: 0, bytes: 0 }
+  }
+  selected.forEach((p) => {
+    // Paths picked in Explore's drill-down are not in the scan lists; treat them as your files.
+    const r = pathRisk.get(p) ?? 'review'
+    mix[r].count += 1
+    mix[r].bytes += sizeMap.get(p) ?? 0
+  })
+  const mixBytes = mix.safe.bytes + mix.caution.bytes + mix.review.bytes
+  const toggleGroup = (risk: RiskLevel): void =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(risk)) next.delete(risk)
+      else next.add(risk)
+      return next
+    })
 
   return (
     <div className="space-y-4">
@@ -215,29 +330,68 @@ export default function Dashboard(): React.JSX.Element {
               Nothing found in the places Sift checks — your Mac looks clean.
             </p>
           )}
-          {GROUPS.map((g) => {
-            const cats = visibleCategories.filter((c) => c.risk === g.risk)
-            if (cats.length === 0) return null
-            return (
-              <div key={g.risk} className="space-y-2">
-                <div className="flex items-baseline justify-between gap-3 pt-1">
-                  <h2 className="text-[15px] font-semibold">
-                    <span aria-hidden="true" className={g.color}>
-                      ●{' '}
-                    </span>
-                    {g.title}
-                  </h2>
-                  <span className="text-[13px] tabular-nums text-[var(--sift-text-muted)]">
-                    {formatBytes(totals[g.risk])}
-                  </span>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-start gap-3">
+            {GROUPS.map((g) => {
+              const cats = visibleCategories.filter((c) => c.risk === g.risk)
+              if (cats.length === 0) return null
+              const rowCats = cats.filter((c) => c.id !== 'trash')
+              const rows = rowCats
+                .flatMap((c) => c.items)
+                .sort((x, y) => y.sizeBytes - x.sizeBytes)
+                .slice(0, 3)
+              const matched = rowCats.reduce(
+                (n, c) => n + (c.matchedItemCount ?? c.items.length),
+                0
+              )
+              const more = matched - rows.length
+              const isOpen = openGroups.has(g.risk)
+              return (
+                <div key={g.risk} className="space-y-2">
+                  <div className="space-y-2 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <RiskBadge risk={g.risk} />
+                      <span className="text-[15px] font-semibold tabular-nums">
+                        {formatBytes(totals[g.risk])}
+                      </span>
+                    </div>
+                    <h2 className="text-[15px] font-semibold">{g.title}</h2>
+                    <p className="text-[12.5px] text-[var(--sift-text-muted)]">{g.hint}</p>
+                    {rows.length > 0 && (
+                      <ul className="divide-y divide-[var(--sift-border)]">
+                        {rows.map((item) => (
+                          <li key={item.path} className="flex items-center gap-2.5 py-2.5">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${item.name}`}
+                              checked={selected.has(item.path)}
+                              onChange={() => toggleSelected(item.path)}
+                              className="shrink-0 accent-[var(--sift-accent)]"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-[13px]" title={item.path}>
+                              {item.name}
+                            </span>
+                            <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--sift-text-muted)]">
+                              {formatBytes(item.sizeBytes)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {(more > 0 || cats.length > rowCats.length) && (
+                      <button
+                        onClick={() => toggleGroup(g.risk)}
+                        aria-expanded={isOpen}
+                        className="text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+                      >
+                        {isOpen ? 'Hide details' : more > 0 ? `${more} more` : 'Show details'}
+                      </button>
+                    )}
+                  </div>
+                  {isOpen && cats.map((c) => <CategoryCard key={c.id} category={c} />)}
                 </div>
-                <p className="text-[12.5px] text-[var(--sift-text-muted)]">{g.hint}</p>
-                {cats.map((c) => (
-                  <CategoryCard key={c.id} category={c} />
-                ))}
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </section>
 
         <aside className="min-w-0 flex-[1_1_260px] space-y-4">
@@ -261,6 +415,31 @@ export default function Dashboard(): React.JSX.Element {
               selected · moves to {bin}, recoverable
             </span>
           </span>
+          {mixBytes > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="flex gap-3 text-[12px] text-[var(--sift-text-muted)]">
+                {(['safe', 'caution', 'review'] as RiskLevel[])
+                  .filter((r) => mix[r].count > 0)
+                  .map((r) => (
+                    <span key={r} className="tabular-nums">
+                      <span aria-hidden="true" className={MIX[r].text}>
+                        ●{' '}
+                      </span>
+                      {mix[r].count} {MIX[r].label(mix[r].count)}
+                    </span>
+                  ))}
+              </span>
+              <div aria-hidden="true" className="flex h-1.5 w-24 overflow-hidden rounded-full">
+                {(['safe', 'caution', 'review'] as RiskLevel[]).map((r) => (
+                  <div
+                    key={r}
+                    className={MIX[r].bg}
+                    style={{ width: `${(mix[r].bytes / mixBytes) * 100}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={clearSelected}

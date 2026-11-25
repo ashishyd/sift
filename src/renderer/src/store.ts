@@ -14,15 +14,12 @@ import type {
   ScanSummary
 } from '@shared/types'
 import { formatBytes } from './lib/format'
+import type { ScanProgressPayload, StepResult } from '@shared/scanProgress'
 import { bin } from './lib/platform'
 
 export type View = 'dashboard' | 'duplicates' | 'explore' | 'ai-apps' | 'hidden' | 'review'
 
-interface ScanProgress {
-  label: string
-  done: number
-  total: number
-}
+type ScanProgress = ScanProgressPayload
 
 interface SiftState {
   summary: ScanSummary | null
@@ -32,7 +29,7 @@ interface SiftState {
   /** A finished automatic scan held back while items are selected, so rows don't jump under the user. */
   pendingSummary: ScanSummary | null
   progress: ScanProgress | null
-  scanLog: string[]
+  scanLog: StepResult[]
   selected: Set<string>
   aiSuggestion: AiSuggestion | null
   isLoadingAi: boolean
@@ -244,10 +241,7 @@ export const useSiftStore = create<SiftState>((set, get) => ({
       const summary = await window.api.scan((p) =>
         set((state) => ({
           progress: p,
-          scanLog:
-            state.progress && state.progress.label !== p.label
-              ? [...state.scanLog, state.progress.label]
-              : state.scanLog
+          scanLog: p.last ? [...state.scanLog, p.last] : state.scanLog
         }))
       )
       set({ summary, isScanning: false, progress: null })

@@ -107,20 +107,25 @@ export default function SettingsModal(): React.JSX.Element | null {
         : 'text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]'
     )
 
-  const numberField = (
-    label: string,
+  const numInput = (keyName: keyof ScanPreferences, ariaLabel?: string): React.JSX.Element => (
+    <input
+      type="number"
+      aria-label={ariaLabel}
+      value={draft[keyName] as number}
+      onChange={(e) => setDraft((prev) => ({ ...prev, [keyName]: Number(e.target.value) }))}
+      className="mx-1.5 w-[64px] rounded-lg border border-[var(--sift-border)] bg-[var(--sift-bg)] px-2 py-1 text-[13px] tabular-nums outline-none focus:border-[var(--sift-accent)]"
+    />
+  )
+
+  const ruleRow = (
+    before: string,
     keyName: keyof ScanPreferences,
-    hint: string
+    after: string
   ): React.JSX.Element => (
-    <label className="block">
-      <span className="text-[12px] font-medium text-[var(--sift-text-muted)]">{label}</span>
-      <input
-        type="number"
-        value={draft[keyName] as number}
-        onChange={(e) => setDraft((prev) => ({ ...prev, [keyName]: Number(e.target.value) }))}
-        className="mt-1 w-full rounded-lg border border-[var(--sift-border)] bg-[var(--sift-bg)] px-3 py-1.5 text-[13px] outline-none focus:border-[var(--sift-accent)]"
-      />
-      <span className="text-[11px] text-[var(--sift-text-muted)] mt-1 block">{hint}</span>
+    <label className="flex cursor-pointer items-center px-4 py-2.5 text-[13px]">
+      {before}
+      {numInput(keyName)}
+      {after}
     </label>
   )
 
@@ -232,19 +237,20 @@ export default function SettingsModal(): React.JSX.Element | null {
                 <p className="text-[12.5px] text-[var(--sift-text-muted)]">
                   Tune what Sift looks for. Changes apply on the next scan.
                 </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {numberField('Large file size (MB)', 'largeFileMinMb', 'Minimum file size')}
-                  {numberField('Large file age (days)', 'largeFileMinAgeDays', 'Untouched for…')}
-                  {numberField(
-                    'Old Downloads (days)',
-                    'downloadsMinAgeDays',
-                    'Downloads age filter'
-                  )}
-                  {numberField('Logs age (days)', 'logsMinAgeDays', 'Log / crash age filter')}
-                  {numberField('Mail downloads (days)', 'mailMinAgeDays', 'Mail attachment age')}
-                  {numberField('Messages (days)', 'messagesMinAgeDays', 'Attachment age')}
-                  {numberField('Xcode archives (days)', 'archivesMinAgeDays', 'Archive age')}
-                  {numberField('Background scan (hours)', 'backgroundScanHours', 'Menu bar rescan')}
+                <div className="divide-y divide-[var(--sift-border)] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)]">
+                  {ruleRow('Flag Downloads older than', 'downloadsMinAgeDays', 'days')}
+                  <div className="flex items-center px-4 py-2.5 text-[13px]">
+                    Call a file large above
+                    {numInput('largeFileMinMb', 'Large file size (MB)')}
+                    MB when untouched for
+                    {numInput('largeFileMinAgeDays', 'Large file age (days)')}
+                    days
+                  </div>
+                  {ruleRow('Flag logs and crash reports older than', 'logsMinAgeDays', 'days')}
+                  {ruleRow('Flag Mail downloads older than', 'mailMinAgeDays', 'days')}
+                  {ruleRow('Flag Messages attachments older than', 'messagesMinAgeDays', 'days')}
+                  {ruleRow('Flag Xcode archives older than', 'archivesMinAgeDays', 'days')}
+                  {ruleRow('Rescan from the menu bar every', 'backgroundScanHours', 'hours')}
                 </div>
 
                 <div className="rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3.5 space-y-2">
@@ -260,8 +266,8 @@ export default function SettingsModal(): React.JSX.Element | null {
                     Notify me when free space runs low
                   </label>
                   {draft.lowSpaceAlertsEnabled && (
-                    <div className="grid grid-cols-2 gap-3">
-                      {numberField('Alert below (GB free)', 'lowSpaceThresholdGb', 'Startup disk')}
+                    <div className="-mx-3.5 border-t border-[var(--sift-border)]">
+                      {ruleRow('Warn me when free space drops below', 'lowSpaceThresholdGb', 'GB')}
                     </div>
                   )}
                 </div>
@@ -283,12 +289,8 @@ export default function SettingsModal(): React.JSX.Element | null {
                     Skipped on battery.
                   </p>
                   {draft.autoScanEnabled && (
-                    <div className="grid grid-cols-2 gap-3">
-                      {numberField(
-                        'Rescan after free space drops (GB)',
-                        'autoScanDropGb',
-                        'Since the last scan'
-                      )}
+                    <div className="-mx-3.5 border-t border-[var(--sift-border)]">
+                      {ruleRow('Rescan when free space drops by', 'autoScanDropGb', 'GB')}
                     </div>
                   )}
                 </div>

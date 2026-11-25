@@ -42,7 +42,7 @@ export async function startScan(): Promise<ScanSummary> {
   lastAttemptAt = Date.now()
   pushToWindow('sift:scan-state', { running: true })
   return runFullScan(
-    (label, done, total) => pushToWindow('sift:scan-progress', { label, done, total }),
+    (label, done, total, last) => pushToWindow('sift:scan-progress', { label, done, total, last }),
     ignored,
     prefs
   ).finally(() => pushToWindow('sift:scan-state', { running: false }))

@@ -1,4 +1,5 @@
 import { detectPlatform } from '../shared/platform'
+import type { ScanProgressPayload } from '../shared/scanProgress'
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
@@ -26,8 +27,8 @@ function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
 
 const api = {
   platform: detectPlatform(process.platform),
-  scan: (onProgress: (p: { label: string; done: number; total: number }) => void): Promise<ScanSummary> => {
-    const listener = (_event: unknown, payload: { label: string; done: number; total: number }): void =>
+  scan: (onProgress: (p: ScanProgressPayload) => void): Promise<ScanSummary> => {
+    const listener = (_event: unknown, payload: ScanProgressPayload): void =>
       onProgress(payload)
     ipcRenderer.on('sift:scan-progress', listener)
     return ipcRenderer.invoke('sift:scan').finally(() => {
@@ -76,7 +77,7 @@ const api = {
     ipcRenderer.on('sift:navigate', listener)
     return () => ipcRenderer.removeListener('sift:navigate', listener)
   },
-  onScanProgress: (cb: (p: { label: string; done: number; total: number }) => void): (() => void) =>
+  onScanProgress: (cb: (p: ScanProgressPayload) => void): (() => void) =>
     subscribe('sift:scan-progress', cb),
   onScanState: (cb: (running: boolean) => void): (() => void) =>
     subscribe<{ running: boolean }>('sift:scan-state', (s) => cb(s.running)),

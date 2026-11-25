@@ -10,6 +10,7 @@ import ReviewView from './components/ReviewView'
 import CommandPalette from './components/CommandPalette'
 import SettingsModal from './components/SettingsModal'
 import { formatBytes } from './lib/format'
+import { riskTotals } from '@shared/reclaimable'
 import { isMac, modKey } from './lib/platform'
 import appIcon from './assets/app-icon.png'
 
@@ -39,6 +40,10 @@ function App(): React.JSX.Element {
   const duplicates = useSiftStore((s) => s.duplicates)
   const aiApps = useSiftStore((s) => s.aiApps)
   const hiddenSpace = useSiftStore((s) => s.hiddenSpace)
+
+  const startup = summary?.volumes?.[0]
+  const reclaimable = summary?.reclaimableBytes ?? 0
+  const safeBytes = summary ? riskTotals(summary.categories).safe : 0
 
   const meta: Partial<Record<View, number>> = {
     dashboard: summary?.reclaimableBytes,
@@ -148,6 +153,37 @@ function App(): React.JSX.Element {
           </button>
         ))}
         <div className="grow" />
+        {startup && (
+          <div className="mb-1.5 space-y-1.5 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-3 text-[12px]">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate font-medium">
+                {startup.mountPoint === '/' || /^[A-Za-z]:/.test(startup.mountPoint)
+                  ? 'Startup disk'
+                  : startup.mountPoint}
+              </span>
+              <span className="shrink-0 tabular-nums text-[var(--sift-text-muted)]">
+                {formatBytes(startup.freeBytes)} free
+              </span>
+            </div>
+            <div
+              role="img"
+              aria-label={`${formatBytes(startup.totalBytes - startup.freeBytes)} used, ${formatBytes(reclaimable)} reclaimable`}
+              className="flex h-1 gap-px overflow-hidden rounded-full bg-[#1e222c]"
+            >
+              <div
+                style={{
+                  flex: `${Math.max(startup.totalBytes - startup.freeBytes - reclaimable, 0)} 1 0`,
+                  background: '#3a4152'
+                }}
+              />
+              <div style={{ flex: `${reclaimable} 1 0`, background: 'var(--sift-safe)' }} />
+              <div style={{ flex: `${startup.freeBytes} 1 0` }} />
+            </div>
+            <div className="tabular-nums text-[11.5px] text-[var(--sift-text-muted)]">
+              {formatBytes(startup.freeBytes + safeBytes)} free if you clear safe items
+            </div>
+          </div>
+        )}
         {(hasApiKey || hasClaudeCli) && (
           <div className="flex items-center gap-1.5 rounded-lg border border-[var(--sift-border)] p-2.5 text-[12px]">
             <span className="size-1.5 rounded-full bg-[var(--sift-accent)]" />

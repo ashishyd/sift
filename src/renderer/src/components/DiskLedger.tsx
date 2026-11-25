@@ -86,7 +86,7 @@ export default function DiskLedger(): React.JSX.Element | null {
         <div style={{ flex: `${summary.volumeFreeBytes} 1 0` }} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
         {SEGMENTS.map((s) => (
           <div key={s.risk} className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--sift-text-muted)]">
@@ -99,6 +99,24 @@ export default function DiskLedger(): React.JSX.Element | null {
             <span className="text-[11.5px] text-[var(--sift-text-muted)]">{s.note}</span>
           </div>
         ))}
+        <div className="flex flex-col gap-0.5">
+          <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--sift-text-muted)]">
+            <span className="size-2 rounded-sm bg-[#3a4152]" />
+            Everything else
+          </span>
+          <span className="text-[15px] font-semibold tabular-nums">{formatBytes(otherUsed)}</span>
+          <span className="text-[11.5px] text-[var(--sift-text-muted)]">Not reclaimable</span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--sift-text-muted)]">
+            <span className="size-2 rounded-sm border border-[var(--sift-border)]" />
+            Free
+          </span>
+          <span className="text-[15px] font-semibold tabular-nums">
+            {formatBytes(summary.volumeFreeBytes)}
+          </span>
+          <span className="text-[11.5px] text-[var(--sift-text-muted)]">Available now</span>
+        </div>
         <div className="flex flex-col gap-0.5">
           <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--sift-text-muted)]">
             <span className="size-2 rounded-sm bg-[#3a4152]" />
