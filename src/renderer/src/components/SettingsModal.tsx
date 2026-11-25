@@ -149,16 +149,16 @@ export default function SettingsModal(): React.JSX.Element | null {
             Settings
           </h2>
           <button onClick={() => setTab('access')} className={tabButtonClass('access')}>
-            Access
+            Permissions
           </button>
           <button onClick={() => setTab('scan')} className={tabButtonClass('scan')}>
-            Scan
+            Scanning
           </button>
           <button onClick={() => setTab('ai')} className={tabButtonClass('ai')}>
             Claude
           </button>
           <button onClick={() => setTab('activity')} className={tabButtonClass('activity')}>
-            Activity
+            History
           </button>
         </nav>
 

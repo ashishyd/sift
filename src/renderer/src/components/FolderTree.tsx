@@ -138,7 +138,7 @@ function ItemNode({
         <div
           role="img"
           aria-label={`${share}% of parent`}
-          className="h-1 w-[120px] shrink-0 overflow-hidden rounded-full bg-[#1e222c]"
+          className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-[#1e222c]"
         >
           <div className="h-1 bg-[var(--sift-accent)]" style={{ width: `${share}%` }} />
         </div>
@@ -245,18 +245,24 @@ function CategoryRow({
       <div
         role="img"
         aria-label={`${share}% of listed`}
-        className="h-1 w-[100px] shrink-0 overflow-hidden rounded-full bg-[#1e222c]"
+        className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-[#1e222c]"
       >
         <div className="h-1 bg-[var(--sift-accent)]" style={{ width: `${share}%` }} />
       </div>
       <span className="text-[13px] font-semibold tabular-nums w-20 text-right shrink-0">
         {formatBytes(category.totalSizeBytes)}
       </span>
-      <span className="text-[12px] tabular-nums text-[var(--sift-text-muted)] w-20 text-right shrink-0">
+      <span className="text-[12px] tabular-nums text-[var(--sift-text-muted)] w-16 text-right shrink-0">
         {formatRelativeDate(newestModified(category))}
       </span>
     </div>
   )
+}
+
+const RISK_CONSEQUENCE: Record<CategoryResult['risk'], string> = {
+  safe: 'Rebuilds on its own',
+  caution: 'Usually fine, skim the list first',
+  review: 'Your files: check each one'
 }
 
 function KnowPanel({ category }: { category: CategoryResult | null }): React.JSX.Element {
@@ -265,6 +271,8 @@ function KnowPanel({ category }: { category: CategoryResult | null }): React.JSX
     (m, i) => (i.lastModified && i.lastModified > m ? i.lastModified : m),
     ''
   )
+  const biggest = category?.items[0]
+  const consequence = biggest?.hint ?? (category ? RISK_CONSEQUENCE[category.risk] : '')
   return (
     <aside
       aria-labelledby="know-h"
@@ -290,6 +298,10 @@ function KnowPanel({ category }: { category: CategoryResult | null }): React.JSX
             {category.matchedItemCount ?? category.items.length} item(s)
           </div>
           <p className="text-[13px] leading-relaxed">{category.description}</p>
+          <p className="text-[12.5px]">
+            <span className="text-[var(--sift-text-muted)]">If you clear it: </span>
+            {consequence}
+          </p>
           {newest && (
             <p className="text-[12.5px] text-[var(--sift-text-muted)]">
               Newest item touched {formatRelativeDate(newest)}
@@ -299,6 +311,22 @@ function KnowPanel({ category }: { category: CategoryResult | null }): React.JSX
             <p className="text-[12.5px] text-[var(--sift-caution)]">
               macOS refused part of this folder, so the size may be low.
             </p>
+          )}
+          {biggest && (
+            <p
+              className="truncate font-mono text-[11.5px] text-[var(--sift-text-muted)]"
+              title={biggest.path}
+            >
+              {biggest.path}
+            </p>
+          )}
+          {biggest && (
+            <button
+              onClick={() => window.api.revealInFinder(biggest.path)}
+              className="text-[12.5px] text-[var(--sift-text-muted)] hover:text-[var(--sift-text)]"
+            >
+              Reveal in Finder
+            </button>
           )}
           {category.id !== 'trash' && (
             <button
@@ -455,12 +483,12 @@ export default function FolderTree(): React.JSX.Element {
       )}
 
       <div className="flex flex-wrap items-start gap-4">
-        <div className="min-w-0 flex-[999_1_420px] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-2">
+        <div className="min-w-0 flex-[999_1_720px] rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-2">
           <div className="flex items-center gap-2 pr-2 pb-1 text-[11px] text-[var(--sift-text-muted)]">
             <span className="flex-1">Name</span>
-            <span className="w-[100px] shrink-0">Share</span>
+            <span className="w-16 shrink-0">Share</span>
             <span className="w-20 shrink-0 text-right">Size</span>
-            <span className="w-20 shrink-0 text-right">Last touched</span>
+            <span className="w-16 shrink-0 text-right">Last touched</span>
           </div>
           {visible.length === 0 && (
             <p className="px-2 py-3 text-[12.5px] text-[var(--sift-text-muted)]">

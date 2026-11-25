@@ -31,7 +31,18 @@ export default function AiPanel(): React.JSX.Element {
           <div className="size-6 rounded-md bg-[var(--sift-accent-soft)] flex items-center justify-center">
             <span className="text-[var(--sift-accent)] text-xs">✦</span>
           </div>
-          <h3 className="font-medium text-[14px]">AI recommendations</h3>
+          <h3 className="font-medium text-[14px]">Claude&apos;s read</h3>
+          {(aiSuggestion || hasApiKey || hasClaudeCli) && (
+            <span className="text-[11px] text-[var(--sift-text-muted)]">
+              {aiSuggestion
+                ? aiSuggestion.source === 'claude'
+                  ? 'via API key'
+                  : aiSuggestion.source === 'claude-cli'
+                    ? 'via Claude CLI'
+                    : 'local analysis'
+                : `via ${hasApiKey ? 'API key' : 'Claude CLI'}`}
+            </span>
+          )}
         </div>
         {!aiSuggestion && (
           <button
@@ -120,7 +131,7 @@ export default function AiPanel(): React.JSX.Element {
             placeholder={
               canAsk
                 ? summary
-                  ? 'Ask about a specific file or category…'
+                  ? 'Ask about your disk'
                   : 'Scan first to ask questions…'
                 : 'Add a Claude key or install Claude Code to ask questions…'
             }

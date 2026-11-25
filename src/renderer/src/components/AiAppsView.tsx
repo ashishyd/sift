@@ -110,7 +110,7 @@ export default function AiAppsView(): React.JSX.Element {
         </section>
       )}
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] items-start gap-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(460px,1fr))] items-start gap-4">
         {report?.apps.map((app) => (
           <section
             key={app.id}

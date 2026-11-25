@@ -143,13 +143,13 @@ Score: 14/48 inventory items match. P0 1 · P1 12 · P2 9 · P3 2 · Questions 4
   Size: L
   Decided 2026-11-25 (Q1): keep the native macOS menu. No build. Closed as 'won't build'.
 
-- [ ] G14 [DIFFERS] [P2] Overview headline size   (inventory S1.2)
+- [ ] G14 [DIFFERS] [P2] (BLOCKED on Q2, unanswered) Overview headline size   (inventory S1.2)
   Mock 44px / build 32px. Blocked on Q2. Where: Dashboard.tsx:179.
   Accept: per Q2.
   Depends: Q2
   Size: S
 
-- [ ] G15 [DIFFERS] [P2] Overview header search and status   (inventory S1.1)
+- [x] G15 [DIFFERS] [P2] Overview header search and status   (inventory S1.1)
   Mock: header holds a wide search field "Search files, categories and actions ⌘K", then "Scanned 4 min ago · 24 categories" and "Rescan".
   Build: search is a button in the sidebar; header shows "Scanned 25/11/2026, 19:35:12" (absolute date, not relative) and Rescan.
   Where: App.tsx:119-125, Dashboard.tsx:187-205.
@@ -157,8 +157,9 @@ Score: 14/48 inventory items match. P0 1 · P1 12 · P2 9 · P3 2 · Questions 4
   Accept: Header reads "Scanned N min ago".
   Depends: none
   Size: S
+  Done: Dashboard.tsx (local scanAge helper: "just now / N min ago / N h ago", then formatRelativeDate) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
-- [ ] G16 [DIFFERS] [P2] Claude's read card   (inventory S1.8)
+- [x] G16 [DIFFERS] [P2] Claude's read card   (inventory S1.8)
   Mock: card "✦ Claude's read" with a paragraph already written, "via Claude CLI" tag and an "Ask about your disk" box.
   Build: "AI recommendations" with an Analyze button and the text "Using your local Claude Code CLI". No text until Analyze is pressed.
   Where: src/renderer/src/components/AiPanel.tsx:30-60.
@@ -166,14 +167,16 @@ Score: 14/48 inventory items match. P0 1 · P1 12 · P2 9 · P3 2 · Questions 4
   Accept: Card title is "Claude's read".
   Depends: none
   Size: S
+  Done: AiPanel.tsx (title + source tag + ask placeholder; Analyze stays manual: cost decision) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
-- [ ] G17 [DIFFERS] [P2] Settings tab names   (inventory S8.1)
+- [x] G17 [DIFFERS] [P2] Settings tab names   (inventory S8.1)
   Mock: Scanning, Permissions, Claude, History. Build: Access, Scan, Claude, Activity.
   Where: SettingsModal.tsx:8, :146-160.
   Depends: Q3
   Size: S
+  Done: SettingsModal.tsx (labels only: Permissions, Scanning, Claude, History; modal kept per Q3) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
-- [ ] G18 [DIFFERS] [P2] Palette is missing Places, Never flag and key hints   (inventory S10.2-S10.4)
+- [x] G18 [DIFFERS] [P2] Palette is missing Places, Never flag and key hints   (inventory S10.2-S10.4)
   Mock: sections Actions and Places (matching folders, "Open in Explore"), a "Never flag …" action, Esc badge, and ↵ / ⌘↵ badges on rows.
   Build: single list: Go to…, Open Settings, Rescan, Select … for clearing, and Ask Claude; footer "↑↓ move · ↵ run · Esc close".
   Where: src/renderer/src/components/CommandPalette.tsx:36-60, :104-140.
@@ -181,8 +184,9 @@ Score: 14/48 inventory items match. P0 1 · P1 12 · P2 9 · P3 2 · Questions 4
   Accept: Typing "derived" shows an Actions group and a Places group.
   Depends: none
   Size: M
+  Done: CommandPalette.tsx (Actions/Places groups, Never flag via ignoreItems for up to 3 matching items, Esc and key badges, Ctrl/Cmd+Enter asks Claude) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
-- [ ] G19 [DIFFERS] [P2] Restart space cards differ in grouping and wording   (inventory S7.3)
+- [x] G19 [DIFFERS] [P2] Restart space cards differ in grouping and wording   (inventory S7.3)
   Mock: five cards (Memory swap, Deleted still held open, Time Machine snapshots, Simulator runtimes, Temporary files) with a "Comes back on restart" label and permanent actions labelled "Delete…".
   Build: four summary tiles (Held open, Swap in use, Simulators, Snapshots) then section lists. "Quit Google Chrome" appears once per helper process.
   Where: src/renderer/src/components/HiddenSpaceView.tsx:120-260.
@@ -190,16 +194,18 @@ Score: 14/48 inventory items match. P0 1 · P1 12 · P2 9 · P3 2 · Questions 4
   Accept: Chrome appears once with the summed size.
   Depends: none
   Size: M
+  Done: HiddenSpaceView.tsx (held-open files grouped per app, one Quit per app, "Comes back on restart" on swap) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
-- [ ] G20 [MISSING] [P2] Sidebar items lack shortcut hints   (inventory S12.1)
+- [x] G20 [MISSING] [P2] Sidebar items lack shortcut hints   (inventory S12.1)
   Mock: Explore shows "⌘2", Settings "⌘,". Build shows "⌘," only on Settings; Explore has no hint; the size beside Duplicates, AI apps and Restart space only appears after those screens are opened once.
   Where: src/renderer/src/App.tsx:130-160.
   Do: Show `{modKey}{index}` as muted meta when no size is known.
   Accept: Explore shows "⌘2".
   Depends: none
   Size: S
+  Done: App.tsx (sidebar shows modKey+N when no size is known) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
-- [ ] G21 [DIFFERS] [P2] Explore Know panel content   (inventory S4.4)
+- [x] G21 [DIFFERS] [P2] Explore Know panel content   (inventory S4.4)
   Mock: panel lists "What it is", "If you clear it", "Made by", "Last touched", "Path", plus Add to selection, Reveal, Never flag.
   Build: panel shows only an empty prompt until a category is clicked, then description, newest item and one "Select all in this category" button (not exercised on screen).
   Where: src/renderer/src/components/FolderTree.tsx:232-300.
@@ -207,13 +213,15 @@ Score: 14/48 inventory items match. P0 1 · P1 12 · P2 9 · P3 2 · Questions 4
   Accept: Clicking App Caches shows description, consequence and Reveal.
   Depends: none
   Size: M
+  Done: FolderTree.tsx (If you clear it, largest item path, Reveal in Finder) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
-- [ ] G22 [DIFFERS] [P2] Duplicates header and keep rule layout   (inventory S5.1-S5.3)   (unverified: needs a scan; not run)
+- [x] G22 [DIFFERS] [P2] Duplicates header and keep rule layout   (inventory S5.1-S5.3)   (unverified: needs a scan; not run)
   Mock: headline "1.9 GB of copies" with a "Looked in" chip row and a single keep-rule card with "Apply to 38 groups".
   Build (from code): header "Duplicate files", a summary card and a one-line rule bar.
   Where: src/renderer/src/components/DuplicatesView.tsx:22-110.
   Depends: none
   Size: S
+  Done: DuplicatesView.tsx (size-of-copies headline, Looked in chips, rule sentence; Apply button not built: select already applies to all groups) | Verified: typecheck, 93 tests, build, eslint no new warnings; NOT rendered yet
 
 - [ ] G23 [DIFFERS] [P3] Palette row hint for Settings   (S10.2)
   "Open Settings" hint shows a glyph that looks like "⌧" rather than "⌘,".
@@ -224,6 +232,11 @@ Score: 14/48 inventory items match. P0 1 · P1 12 · P2 9 · P3 2 · Questions 4
   Captions such as "Minimum file size" differ from mock phrasing.
   Where: SettingsModal.tsx:215.
   Size: S
+
+- [x] G25 [DIFFERS] [P2] AI apps grid truncates names at 1080 wide
+  Done: AiAppsView.tsx grid minmax(460px,1fr) | Verified: typecheck/tests/build; NOT rendered
+- [x] G26 [DIFFERS] [P2] Explore names truncated at 1080 wide
+  Done: FolderTree.tsx narrower Share/Last touched columns, Know panel wraps under the list | Verified: typecheck/tests/build; NOT rendered
 
 ## Extras (in build, not in mock)
 - E01 "Clear 26 GB marked safe…" button in the Overview disk card (src/renderer/src/components/DiskLedger.tsx:68). It clears all safe items after a native confirm and skips the Review screen, which the mock makes the single route to Trash. Keep or remove? (needs a yes)

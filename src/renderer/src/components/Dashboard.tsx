@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSiftStore } from '../store'
-import { formatBytes } from '../lib/format'
+import { formatBytes, formatRelativeDate } from '../lib/format'
 import { riskTotals } from '@shared/reclaimable'
 import type { RiskLevel } from '@shared/types'
 import type { StepResult } from '@shared/scanProgress'
@@ -90,6 +90,15 @@ function StepRow({ result }: { result: StepResult }): React.JSX.Element {
       </span>
     </li>
   )
+}
+
+/** formatRelativeDate is day-granular; a fresh scan needs minutes. */
+function scanAge(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  if (mins < 1440) return `${Math.floor(mins / 60)} h ago`
+  return formatRelativeDate(iso)
 }
 
 export default function Dashboard(): React.JSX.Element {
@@ -300,7 +309,10 @@ export default function Dashboard(): React.JSX.Element {
           </p>
         </div>
         <div className="flex items-center gap-3 text-[12.5px] text-[var(--sift-text-muted)]">
-          <span>Scanned {new Date(summary.scannedAt).toLocaleString()}</span>
+          <span title={new Date(summary.scannedAt).toLocaleString()}>
+            Scanned {scanAge(summary.scannedAt)} ·{' '}
+            {summary.categories.filter((c) => !c.missing).length} categories
+          </span>
           {autoScanning && <span aria-live="polite">Updating…</span>}
           {pendingSummary && (
             <button

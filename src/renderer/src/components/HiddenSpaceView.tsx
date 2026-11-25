@@ -45,6 +45,25 @@ export default function HiddenSpaceView(): React.JSX.Element {
   const appForPid = (pid: number): string | null =>
     report?.memoryHogs.find((h) => h.pids.includes(pid))?.name ?? null
 
+  // One row per owning app (or process name when unknown); a path counted once per group.
+  const heldGroups: {
+    key: string
+    name: string
+    app: string | null
+    files: Map<string, number>
+  }[] = []
+  for (const f of report?.heldDeleted ?? []) {
+    const app = appForPid(f.pid)
+    const name = app ?? f.processName
+    const key = app ? `app:${app}` : `proc:${f.processName}`
+    let g = heldGroups.find((x) => x.key === key)
+    if (!g) heldGroups.push((g = { key, name, app, files: new Map() }))
+    if (!g.files.has(f.path)) g.files.set(f.path, f.sizeBytes)
+  }
+
+  const groupBytes = (g: { files: Map<string, number> }): number =>
+    [...g.files.values()].reduce((n, b) => n + b, 0)
+
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -145,28 +164,29 @@ export default function HiddenSpaceView(): React.JSX.Element {
               <Empty text="No large deleted-but-open files right now." />
             ) : (
               <ul className="divide-y divide-[var(--sift-border)]">
-                {report.heldDeleted.slice(0, 20).map((f) => {
-                  const app = appForPid(f.pid)
-                  return (
-                    <li key={`${f.pid}:${f.path}`} className="flex items-center gap-3 px-4 py-2.5">
+                {[...heldGroups]
+                  .sort((a, b) => groupBytes(b) - groupBytes(a))
+                  .slice(0, 20)
+                  .map((g) => (
+                    <li key={g.key} className="flex items-center gap-3 px-4 py-2.5">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13px]">{app ?? f.processName}</div>
+                        <div className="text-[13px]">{g.name}</div>
                         <div
                           className="text-[11.5px] text-[var(--sift-text-muted)] truncate"
-                          title={f.path}
+                          title={[...g.files.keys()].join('\n')}
                         >
-                          {f.path}
+                          {g.files.size} file(s)
                         </div>
                       </div>
                       <span className="text-[12.5px] tabular-nums text-[var(--sift-text-muted)]">
-                        {formatBytes(f.sizeBytes)}
+                        {formatBytes(groupBytes(g))}
                       </span>
-                      {app ? (
+                      {g.app ? (
                         <button
-                          onClick={() => quitApp(app)}
+                          onClick={() => quitApp(g.app as string)}
                           className="text-[12.5px] font-medium text-[var(--sift-review)] hover:underline"
                         >
-                          Quit {app}
+                          Quit {g.app}
                         </button>
                       ) : (
                         <span className="text-[11.5px] text-[var(--sift-text-muted)]">
@@ -174,8 +194,7 @@ export default function HiddenSpaceView(): React.JSX.Element {
                         </span>
                       )}
                     </li>
-                  )
-                })}
+                  ))}
               </ul>
             )}
           </Section>
@@ -184,6 +203,9 @@ export default function HiddenSpaceView(): React.JSX.Element {
             title="Memory swap"
             detail={`${formatBytes(report.swapUsedBytes)} of ${formatBytes(report.swapTotalBytes)} swap in use on disk. Quitting memory-heavy apps lets macOS shrink it.`}
           >
+            <p className="px-4 pt-2.5 text-[11.5px] text-[var(--sift-text-muted)]">
+              Comes back on restart
+            </p>
             {report.memoryHogs.length === 0 ? (
               <Empty text="No app is using a large amount of memory." />
             ) : (

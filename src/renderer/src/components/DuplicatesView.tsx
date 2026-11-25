@@ -22,10 +22,23 @@ export default function DuplicatesView(): React.JSX.Element {
     <div className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-0.5">
-          <h1 className="text-[16px] font-semibold">Duplicate files</h1>
-          <p className="text-[12.5px] text-[var(--sift-text-muted)]">
-            Exact-content duplicates in Desktop, Documents, Downloads and Pictures.
-          </p>
+          {duplicates ? (
+            <>
+              <h1 className="text-[32px] font-semibold leading-tight tracking-tight tabular-nums">
+                {formatBytes(duplicates.reclaimableBytes)} of copies
+              </h1>
+              <p className="text-[12.5px] text-[var(--sift-text-muted)] tabular-nums">
+                {`Up to this much, by keeping one copy of each · ${duplicates.groups.length} group(s) · ${fileCount} file(s)`}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-[16px] font-semibold">Duplicate files</h1>
+              <p className="text-[12.5px] text-[var(--sift-text-muted)]">
+                Exact-content duplicates in Desktop, Documents, Downloads and Pictures.
+              </p>
+            </>
+          )}
         </div>
         <button
           onClick={runDuplicateScan}
@@ -70,34 +83,21 @@ export default function DuplicatesView(): React.JSX.Element {
       )}
 
       {duplicates && (
-        <section
-          aria-labelledby="dup-sum"
-          className="flex flex-wrap items-end justify-between gap-4 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] p-5"
-        >
-          <div className="space-y-1">
-            <h2 id="dup-sum" className="text-[12.5px] text-[var(--sift-text-muted)]">
-              Up to this much, by keeping one copy of each
-            </h2>
-            <div className="flex items-baseline gap-2.5">
-              <span className="text-[32px] font-semibold tracking-tight tabular-nums">
-                {formatBytes(duplicates.reclaimableBytes)}
-              </span>
-              <span className="text-[13px] text-[var(--sift-text-muted)] tabular-nums">
-                in {duplicates.groups.length} group(s) · {fileCount} file(s)
-              </span>
-            </div>
-          </div>
-          <p className="max-w-[300px] text-[12px] leading-relaxed text-[var(--sift-text-muted)]">
-            The oldest copy is kept by default. Choose another copy in a group to keep that one
-            instead. Copies moved to the {bin} are recoverable.
-          </p>
+        <section aria-label="Looked in" className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-[var(--sift-text-muted)]">Looked in</span>
+          {FOLDERS.map((f) => (
+            <span
+              key={f}
+              className="rounded-full border border-[var(--sift-border)] px-2.5 py-0.5 text-[11.5px] text-[var(--sift-text-muted)]"
+            >
+              {f}
+            </span>
+          ))}
         </section>
       )}
 
       {duplicates && duplicates.groups.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--sift-border)] bg-[var(--sift-surface)] px-4 py-2.5 text-[12.5px]">
-          <span className="text-[var(--sift-text-muted)]">Looked in {FOLDERS.join(', ')}.</span>
-          <span className="grow" />
           <label htmlFor="keep-folder" className="text-[var(--sift-text-muted)]">
             Keep the copy in
           </label>
@@ -110,13 +110,16 @@ export default function DuplicatesView(): React.JSX.Element {
             }}
             className="rounded-md border border-[var(--sift-border)] bg-[var(--sift-bg)] px-2 py-1 text-[12.5px]"
           >
-            <option value="">the oldest</option>
+            <option value="">any folder</option>
             {FOLDERS.map((f) => (
               <option key={f} value={f}>
                 {f}
               </option>
             ))}
           </select>
+          <span className="text-[var(--sift-text-muted)]">
+            otherwise the oldest. Copies moved to the {bin} are recoverable.
+          </span>
         </div>
       )}
 

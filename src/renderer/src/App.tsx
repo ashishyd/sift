@@ -127,7 +127,7 @@ function App(): React.JSX.Element {
           Search
           <span className="text-[11px]">{modKey}K</span>
         </button>
-        {SECTIONS.map(([id, label]) => (
+        {SECTIONS.map(([id, label], index) => (
           <button
             key={id}
             onClick={() => setActiveView(id)}
@@ -140,6 +140,12 @@ function App(): React.JSX.Element {
             )}
           >
             {label}
+            {(meta[id] ?? 0) <= 0 && id !== 'dashboard' && (
+              <span className="text-[11px] text-[var(--sift-text-muted)]">
+                {modKey}
+                {index + 1}
+              </span>
+            )}
             {(meta[id] ?? 0) > 0 && (
               <span
                 className={clsx(
